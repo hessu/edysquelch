@@ -66,8 +66,12 @@ int expiry_interval;
 
 int verbose;
 
+struct uplink_config_t *uplink_config;
+struct uplink_config_t *new_uplink_config;
+
 int do_interval(int *dest, int argc, char **argv);
 int do_sound_ch(int *dest, int argc, char **argv);
+int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
 
 /*
  *	Configuration file commands
@@ -80,6 +84,8 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "fingerprints",	_CFUNC_ do_string,	&fpdir			},
 	{ "statsinterval",	_CFUNC_ do_interval,	&stats_interval		},
 	{ "expiryinterval",	_CFUNC_ do_interval,	&expiry_interval	},
+	
+	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 
 	{ "sounddevice",	_CFUNC_ do_string,	&sound_device		},
 	{ "soundinfile",	_CFUNC_ do_string,	&sound_in_file		},
@@ -167,6 +173,43 @@ int do_sound_ch(int *dest, int argc, char **argv)
 }
 
 /*
+ *	Parse a uplink definition directive
+ *
+ *	uplink <label> {json} <url>
+ *
+ */
+
+int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
+{
+	struct uplink_config_t *l;
+	int uplink_proto = 0;
+	
+	if (argc < 3)
+		return -1;
+	
+	if (strcasecmp(argv[2], "json") == 0) {
+		uplink_proto = UPLINK_JSON;
+	} else {
+		hlog(LOG_ERR, "Uplink: Unsupported uplink protocol '%s'\n", argv[2]);
+		return -2;
+	}
+	
+	l = hmalloc(sizeof(*l));
+
+	l->proto = uplink_proto;
+	l->name  = hstrdup(argv[1]);
+	l->url = hstrdup(argv[3]);
+
+	/* put in the list */
+	l->next = *lq;
+	if (l->next)
+		l->next->prevp = &l->next;
+	*lq = l;
+	
+	return 0;
+}
+
+/*
  *	upcase
  */
  
@@ -178,6 +221,23 @@ char *strupr(char *s)
 		*p = toupper(*p);
 		
 	return s;
+}
+
+/*
+ *	Free a uplink config tree
+ */
+
+void free_uplink_config(struct uplink_config_t **lc)
+{
+	struct uplink_config_t *this;
+
+	while (*lc) {
+		this = *lc;
+		*lc = this->next;
+		hfree((void*)this->name);
+		hfree((void*)this->url);
+		hfree(this);
+	}
 }
 
 /*
@@ -215,6 +275,13 @@ int read_config(void)
 		sound_device = NULL;
 	}
 	
+	/* put in the new uplink config */
+	free_uplink_config(&uplink_config);
+	uplink_config = new_uplink_config;
+	if (uplink_config)
+		uplink_config->prevp = &uplink_config;
+	new_uplink_config = NULL;
+
 	if (failed)
 		return -1;
 	
@@ -248,6 +315,8 @@ void free_config(void)
 	
 	hfree(sound_in_file);
 	hfree(sound_out_file);
+	
+	free_uplink_config(&uplink_config);
 }
 
 /*

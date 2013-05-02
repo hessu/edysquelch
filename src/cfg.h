@@ -69,5 +69,19 @@ extern void free_config(void);
 
 extern void parse_cmdline(int argc, char *argv[]);
 
+#define UPLINK_JSON 1
+
+struct uplink_config_t {
+	struct uplink_config_t *next;
+	struct uplink_config_t **prevp; /* pointer to the *next pointer in the previous node */
+	
+	int proto;
+	const char *name;			/* name of socket */
+	const char *url;
+};
+
+extern struct uplink_config_t *uplink_config;
+
+
 #endif
 
