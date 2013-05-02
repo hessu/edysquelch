@@ -14,6 +14,7 @@
 #include "out_mysql.h"
 #include "out_json.h"
 #include "cache.h"
+#include "fingerpori.h"
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -76,6 +77,9 @@ int main(int argc, char *argv[])
 		exit(1);
 	
 	signal(SIGINT, closedown);
+	
+	/* load fingerprints */
+	fingerprints_load(fpdir);
 	
 	/* initialize the AIS decoders */
 	if (sound_channels != SOUND_CHANNELS_MONO) {

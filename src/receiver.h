@@ -5,6 +5,21 @@
 #include <stdlib.h>
 #include <math.h>
 
+
+struct fingerprint_t {
+	char *name;
+	int16_t *samples;
+	int len;
+	
+	time_t loaded;
+	
+	struct fingerprint_t *next;
+};
+
+extern struct fingerprint_t *fingerprints;
+
+
+
 struct receiver {
 	struct filter *filter;
 	char name;

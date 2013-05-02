@@ -51,6 +51,53 @@ void free_receiver(struct receiver *rx)
 	}
 }
 
+struct fingerprint_t *fingerprints;
+
+static uint64_t match_single(short *fingerprint, int16_t *samples, int len, int s_step)
+{
+	uint64_t dif_sum = 0;
+	
+	/* calculate absolute difference */
+	int si = 0;
+	int fi;
+	
+	for (fi = 0; fi < len; fi++) {
+		dif_sum += abs((int)samples[si] - (int)fingerprint[fi]);
+		si += s_step;
+	}
+	
+	/* match goodness is the sum of absolute sample differences divided by amount of samples
+	 * (length of fingerprint)
+	 */
+	return dif_sum / ((uint64_t)len/100);
+}
+
+
+static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
+{
+	int si = 0;
+	struct fingerprint_t *fp;
+	int threshold = 100;
+	
+	for (fp = fingerprints; (fp); fp = fp->next) {
+		uint64_t dif = match_single(fp->samples, samples, fp->len, 2);
+		if (dif < threshold) {
+			return fp;
+		}
+	}
+	
+	return NULL;
+}
+
+
+int load_fingerprints(const char *path)
+{
+	int loaded = 0;
+	
+	return loaded;
+}
+
+
 #define	INC	16
 #define FILTERED_LEN 4096
 
@@ -61,7 +108,7 @@ void receiver_run(struct receiver *rx, short *buf, int len)
 	int level_distance;
 	float level;
 	int rx_num_ch = rx->num_ch;
-	float filtered[FILTERED_LEN];
+	short filtered[FILTERED_LEN];
 	int i;
 	
 	/* len is number of samples available in buffer for each
@@ -71,10 +118,11 @@ void receiver_run(struct receiver *rx, short *buf, int len)
 	
 	if (len > FILTERED_LEN)
 		abort();
-
+	
 	maxval = filter_run_buf(rx->filter, buf, filtered, rx_num_ch, len);
 	
 	for (i = 0; i < len; i++) {
+		
 		out = filtered[i];
 	}
 	

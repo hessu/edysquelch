@@ -50,6 +50,7 @@ char def_sound_device[] = "default";
 char *cfgfile = def_cfgfile;
 char *pidfile;
 char *logdir;	/* access logs go here */
+char *fpdir;	/* fingerprints go here */
 
 char *logname = def_logname;	/* syslog entries use this program name */
 
@@ -76,6 +77,7 @@ int do_sound_ch(int *dest, int argc, char **argv);
 
 static struct cfgcmd cfg_cmds[] = {
 	{ "logdir",		_CFUNC_ do_string,	&logdir			},
+	{ "fingerprints",	_CFUNC_ do_string,	&fpdir			},
 	{ "statsinterval",	_CFUNC_ do_interval,	&stats_interval		},
 	{ "expiryinterval",	_CFUNC_ do_interval,	&expiry_interval	},
 

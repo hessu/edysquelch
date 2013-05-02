@@ -1,0 +1,6 @@
+
+Recording to wav:
+$ sox -r 48k -e signed -b 16 -c 2 test.raw test.wav
+
+Fingerprint to raw:
+$ sox oh7lzb-p2.wav -r 48k -e signed -b 16 -c 1 oh7lzb-p2.raw

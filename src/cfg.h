@@ -62,6 +62,7 @@ extern char *cfgfile;
 extern char *pidfile;
 extern char *logdir;
 extern char *logname;
+extern char *fpdir;
 
 extern int read_config(void);
 extern void free_config(void);
