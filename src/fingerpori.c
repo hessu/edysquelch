@@ -79,7 +79,7 @@ static int fingerprint_load(const char *d, const char *f)
 	}
 	
 	fp->len = nread/sizeof(fp->samples[0]);
-
+	
 	ret = 0;
 	hlog(LOG_INFO, "Loaded fingerprint file %s: %d bytes, %d samples", fn, nread, fp->len);
 	

@@ -55,7 +55,7 @@ void free_receiver(struct receiver *rx)
 
 struct fingerprint_t *fingerprints;
 
-static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int len)
+static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int len, unsigned long giveup)
 {
 	unsigned long dif_sum = 0;
 	
@@ -63,7 +63,9 @@ static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int le
 	int i;
 	
 	for (i = 0; i < len; i++) {
-		dif_sum += abs((int)samples[i] - (int)fingerprint[i]);
+		dif_sum += abs(samples[i] - fingerprint[i]);
+		if (dif_sum > giveup)
+			return -1;
 	}
 	
 	/* match goodness is the sum of absolute sample differences divided by amount of samples
@@ -77,14 +79,15 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 {
 	struct fingerprint_t *fp;
 	int threshold_weak = 1000;
-	int threshold_strong = 600;
+	int threshold_strong = 900;
 	
 	for (fp = fingerprints; (fp); fp = fp->next) {
 		unsigned long best = -1;
+		unsigned long giveup = threshold_weak*fp->len;
 		
 		int x;
 		for (x = 0; x < len; x += 4) {
-			unsigned long dif = match_single(fp->samples, &samples[x-fp->len], fp->len);
+			unsigned long dif = match_single(fp->samples, &samples[x-fp->len], fp->len, giveup);
 			if (dif < best)
 				best = dif;
 		}
