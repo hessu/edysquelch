@@ -1,5 +1,7 @@
-add_executable(edysquelch ais.c ais.c cfg.c crc32.c hlog.c input.c receiver.c splay.c
-	spsymbol.c cache.c cfgfile.c filter.c hmalloc.c rwlock.c fingerpori.c)
+add_executable(edysquelch ais.c cfg.c crc32.c hlog.c input.c receiver.c
+	splay.c spsymbol.c
+	cJSON.c
+	cache.c cfgfile.c filter.c hmalloc.c rwlock.c fingerpori.c)
 
 target_link_libraries(edysquelch pthread asound)
 
