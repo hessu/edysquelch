@@ -18,14 +18,16 @@ struct fingerprint_t {
 
 extern struct fingerprint_t *fingerprints;
 
-
-
+#define RECEIVER_BUFLEN 16384
 struct receiver {
 	struct filter *filter;
 	char name;
 	int num_ch;
 	int ch_ofs;
 	time_t last_levellog;
+	
+	int bufpos;
+	int16_t buffer[RECEIVER_BUFLEN];
 };
 
 extern struct receiver *init_receiver(char name, int num_ch, int ch_ofs);

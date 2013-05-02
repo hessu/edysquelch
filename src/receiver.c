@@ -39,6 +39,8 @@ struct receiver *init_receiver(char name, int num_ch, int ch_ofs)
 	rx->num_ch = num_ch;
 	rx->ch_ofs = ch_ofs;
 	rx->last_levellog = 0;
+	
+	rx->bufpos = RECEIVER_BUFLEN/4;
 
 	return rx;
 }
@@ -53,78 +55,94 @@ void free_receiver(struct receiver *rx)
 
 struct fingerprint_t *fingerprints;
 
-static uint64_t match_single(short *fingerprint, int16_t *samples, int len, int s_step)
+static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int len)
 {
-	uint64_t dif_sum = 0;
+	unsigned long dif_sum = 0;
 	
 	/* calculate absolute difference */
-	int si = 0;
-	int fi;
+	int i;
 	
-	for (fi = 0; fi < len; fi++) {
-		dif_sum += abs((int)samples[si] - (int)fingerprint[fi]);
-		si += s_step;
+	for (i = 0; i < len; i++) {
+		dif_sum += abs((int)samples[i] - (int)fingerprint[i]);
 	}
 	
 	/* match goodness is the sum of absolute sample differences divided by amount of samples
 	 * (length of fingerprint)
 	 */
-	return dif_sum / ((uint64_t)len/100);
+	return dif_sum / len;
 }
 
 
 static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 {
-	int si = 0;
 	struct fingerprint_t *fp;
-	int threshold = 100;
+	int threshold_weak = 1000;
+	int threshold_strong = 600;
 	
 	for (fp = fingerprints; (fp); fp = fp->next) {
-		uint64_t dif = match_single(fp->samples, samples, fp->len, 2);
-		if (dif < threshold) {
-			return fp;
+		unsigned long best = -1;
+		
+		int x;
+		for (x = 0; x < len; x += 4) {
+			unsigned long dif = match_single(fp->samples, &samples[x-fp->len], fp->len);
+			if (dif < best)
+				best = dif;
+		}
+		
+		//hlog(LOG_DEBUG, "Best match: %ld", best);
+		if (best < threshold_weak) {
+			hlog(LOG_INFO, "%s wingerprint match, best %lu: %s",
+				(best < threshold_strong) ? "STRONG" : "weak",
+				best, fp->name);
 		}
 	}
 	
 	return NULL;
 }
 
-
-int load_fingerprints(const char *path)
+static int copy_buffer(short *in, short *out, int step, int len, short *maxval_out)
 {
-	int loaded = 0;
+	int id = 0;
+	int od = 0;
+	short maxval = 0;
 	
-	return loaded;
+	while (od < len) {
+		out[od] = in[id];
+		if (in[id] > maxval)
+			maxval = in[id];
+		
+		id += step;
+		od++;
+	}
+	
+	*maxval_out = maxval;
+	return od;
 }
-
-
-#define	INC	16
-#define FILTERED_LEN 4096
 
 void receiver_run(struct receiver *rx, short *buf, int len)
 {
-	float out;
 	short maxval = 0;
 	int level_distance;
 	float level;
 	int rx_num_ch = rx->num_ch;
-	short filtered[FILTERED_LEN];
-	int i;
 	
 	/* len is number of samples available in buffer for each
 	 * channels - something like 1024, regardless of number of channels */
 	
 	buf += rx->ch_ofs;
 	
-	if (len > FILTERED_LEN)
+	if (len > RECEIVER_BUFLEN/2)
 		abort();
 	
-	maxval = filter_run_buf(rx->filter, buf, filtered, rx_num_ch, len);
-	
-	for (i = 0; i < len; i++) {
-		
-		out = filtered[i];
+#define RECEIVER_BUF_COPY (RECEIVER_BUFLEN/4)
+	if (rx->bufpos + len/rx_num_ch > RECEIVER_BUFLEN) {
+		memcpy(rx->buffer, &rx->buffer[RECEIVER_BUF_COPY*3], RECEIVER_BUF_COPY*sizeof(uint16_t));
+		rx->bufpos = RECEIVER_BUF_COPY;
 	}
+	
+	int copied = copy_buffer(buf, &rx->buffer[rx->bufpos], rx_num_ch, len, &maxval);
+	search_fingerprints(&rx->buffer[rx->bufpos], len);
+	rx->bufpos += copied;
 	
 	/* calculate level, and log it */
 	level = (float)maxval / (float)32768 * (float)100;

@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-
+                     
 #include "receiver.h"
 #include "fingerpori.h"
 #include "hlog.h"
@@ -20,6 +20,13 @@ struct fingerprint_t *fingerprint_alloc(void)
 	memset((void *)fp, 0, sizeof(*fp));
 	
 	return fp;
+}
+
+void fingerprint_free(struct fingerprint_t *fp)
+{
+	hfree(fp->name);
+	hfree(fp->samples);
+	hfree(fp);
 }
 
 static int fingerprint_filematch(const struct dirent *e)
@@ -43,6 +50,7 @@ static int fingerprint_load(const char *d, const char *f)
 	int fnlen = strlen(d) + strlen(f) + 3;
 	char *fn = hmalloc(fnlen);
 	struct fingerprint_t *fp = NULL;
+	struct stat st;
 	
 	snprintf(fn, fnlen, "%s/%s", d, f);
 	
@@ -52,13 +60,41 @@ static int fingerprint_load(const char *d, const char *f)
 		goto end;
 	}
 	
+	if (fstat(fd, &st) != 0) {
+		hlog(LOG_ERR, "Failed to stat fingerprint file %s: %s", fn, strerror(errno));
+		goto close;
+	}
 	
+	fp = fingerprint_alloc();
+	fp->name = hstrdup(f);
 	
-	close(fd);
+	fp->samples = hmalloc(st.st_size);
+	int nread = read(fd, (void *)fp->samples, st.st_size);
+	if (nread < 0) {
+		hlog(LOG_ERR, "Failed to read from fingerprint file %s: %s", fn, strerror(errno));
+		goto close;
+	} else if (nread != st.st_size) {
+		hlog(LOG_ERR, "Short read from fingerprint file %s: %d != %d", fn, nread, st.st_size);
+		goto close;
+	}
 	
+	fp->len = nread/sizeof(fp->samples[0]);
+
 	ret = 0;
+	hlog(LOG_INFO, "Loaded fingerprint file %s: %d bytes, %d samples", fn, nread, fp->len);
+	
+	/* put to linked list */
+	fp->next = fingerprints;
+	fingerprints = fp;
+	
+close:	
+	if (close(fd) != 0)
+		hlog(LOG_ERR, "Failed to close fingerprint %s after reading: %s", fn, strerror(errno));
 end:
 	hfree(fn);
+	
+	if (ret != 0 && fp)
+		fingerprint_free(fp);
 	
 	return ret;
 }
@@ -69,9 +105,9 @@ int fingerprints_load(const char *dir)
 	int n;
 	
 	n = scandir(dir, &namelist, fingerprint_filematch, alphasort);
-	if (n < 0)
+	if (n < 0) {
 		hlog(LOG_ERR, "scandir of '%s' failed: %s", dir, strerror(errno));
-	else {
+	} else {
 		while (n--) {
 			hlog(LOG_INFO, "Loading: %s", namelist[n]->d_name);
 			fingerprint_load(dir, namelist[n]->d_name);
