@@ -4,6 +4,7 @@ project (gnuais)
 INCLUDE(CheckIncludeFiles)
 
 CHECK_INCLUDE_FILES(alsa/asoundlib.h HAVE_ALSA)
+CHECK_INCLUDE_FILES(curl/curl.h HAVE_CURL)
 
 set(CMAKE_C_FLAGS "-g -Wall")
 

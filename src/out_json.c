@@ -36,7 +36,6 @@
 #endif
 
 #include "out_json.h"
-#include "splay.h"
 #include "hlog.h"
 #include "hmalloc.h"
 #include "cfg.h"
@@ -52,6 +51,13 @@ static int jsonout_die = 0;
 #endif
 
 #ifdef ENABLE_JSONAIS_CURL
+
+struct que_t {
+	const char *s;
+	struct que_t *next;
+} *out_json_que = NULL;
+struct que_t **out_json_tail = &out_json_que;
+pthread_mutex_t out_json_que_mut = PTHREAD_MUTEX_INITIALIZER;
 
 /*
  *	a dummy curl response data handler - it'll get to handle whatever
@@ -210,7 +216,6 @@ static void jsonout_post_all(char *json)
 
 static void jsonout_export(void)
 {
-	unsigned int entries = 0;
 	unsigned int exported = 0;
 	char *json = NULL;
 	time_t now;
@@ -274,6 +279,20 @@ int jsonout_deinit(void)
 	}
 	
 	curl_global_cleanup();
+	
+	return 0;
+}
+
+int jsonout_push(const char *s)
+{
+	struct que_t *q = hmalloc(sizeof(*q));
+	
+	q->s = s;
+	
+	pthread_mutex_lock(&out_json_que_mut);
+	*out_json_tail = q;
+	out_json_tail = &q->next;
+	pthread_mutex_unlock(&out_json_que_mut);
 	
 	return 0;
 }
