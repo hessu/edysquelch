@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "ais.h"
+#include "edysquelch.h"
 #include "input.h"
 #include "receiver.h"
 #include "protodec.h"
