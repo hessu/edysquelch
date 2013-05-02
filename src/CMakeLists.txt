@@ -1,7 +1,7 @@
-add_executable(gnuais ais.c ais.c cfg.c crc32.c hlog.c input.c receiver.c splay.c cache.c cfgfile.c filter.c hmalloc.c rwlock.c spsymbol.c) 
+add_executable(edysquelch ais.c ais.c cfg.c crc32.c hlog.c input.c receiver.c splay.c cache.c cfgfile.c filter.c hmalloc.c rwlock.c spsymbol.c) 
 
-target_link_libraries(gnuais pthread asound)
+target_link_libraries(edysquelch pthread asound)
 
-install(TARGETS gnuais DESTINATION bin)
-install (FILES gnuais.conf DESTINATION /etc)
+install(TARGETS edysquelch DESTINATION bin)
+install (FILES edysquelch.conf DESTINATION /etc)
 
