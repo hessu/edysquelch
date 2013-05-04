@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html ng-app='edysquelch'>
+<head>
+<title>edysquelch</title>
+<meta name="lang" content="en" />
+<meta http-equiv="Content-Type" content="application/xhtml+xml;charset=UTF-8" />
+<link rel="stylesheet" type="text/css" href="/edysquelch.css" />
+<script src="angular.min.js"></script>
+</head>
+
+<body ng-controller="edyCtrl">
+
+<p>event seq {{ evq.seq }} que {{ evq.len }}</p>
+
+<div style='height: 230px; width: 600px;' id='graph'></div>
+
+<h3>Events</h3>
+<table>
+<tr><th>Time</th>
+	<th>Fingerprint</th>
+	<th>Type</th>
+	<th>Difference</th>
+	</tr>
+<tr ng-repeat="c in ev" ng-click="rowClick(c);"><td>{{ c.t|datetime }}</td>
+	<td>{{ c.name }}</td>
+	<td>{{ c.event }}</td>
+	<td>{{ c.q }}</td>
+	</tr>
+</table>
+
+<script type='text/JavaScript' src='jquery.min.js'></script>
+<!--[if lte IE 8]><script type='text/JavaScript' src='excanvas.min.js'></script><![endif]-->
+<script type='text/JavaScript' src='jquery.flot.min.js'></script>
+<script type='text/JavaScript' src='edy.js'></script>
+
+</body>
+</html>
