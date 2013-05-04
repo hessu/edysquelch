@@ -19,12 +19,14 @@
 <tr><th>Time</th>
 	<th>Fingerprint</th>
 	<th>Type</th>
-	<th>Difference</th>
+	<th>Diff</th>
+	<th>FPLen</th>
 	</tr>
 <tr ng-repeat="c in ev" ng-click="rowClick(c);"><td>{{ c.t|datetime }}</td>
 	<td>{{ c.name }}</td>
 	<td>{{ c.event }}</td>
 	<td>{{ c.q }}</td>
+	<td>{{ c.fplen }}</td>
 	</tr>
 </table>
 

@@ -90,7 +90,7 @@ var handle_upd = function(req, res) {
 	util.log("got upd req: " + JSON.stringify(req.query));
 	
 	var seq = parseInt(req.query['seq']);
-	if (seq) {
+	if (seq && seq <= evq_seq) {
 		util.log("updating with seq " + seq);
 	} else {
 		if (evq_seq > 0)

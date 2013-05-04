@@ -92,6 +92,7 @@ static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int le
 	cJSON_AddStringToObject(no, "id", id);
 	cJSON_AddStringToObject(no, "event", "match");
 	cJSON_AddNumberToObject(no, "q", q);
+	cJSON_AddNumberToObject(no, "fplen", fp->len);
 	
 	cJSON_AddStringToObject(no, "name", fp->name);
 	cJSON_AddItemToObject(no, "fp", cJSON_CreateShortArray(fp->samples, fp->len));
@@ -103,7 +104,7 @@ static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int le
 	char *out = cJSON_PrintUnformatted(no);
 	cJSON_Delete(no);
 	
-	hlog(LOG_DEBUG, "Notify out: %s", out);
+	hlog(LOG_DEBUG, "Notify out"); //: %s", out);
 	
 	jsonout_push(out);
 }
@@ -129,6 +130,13 @@ static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int le
 	return dif_sum / len;
 }
 
+#define TOPLEN 5
+struct matchlist_t {
+	int len;
+	int dif;
+	int x_ofs;
+	struct fingerprint_t *fp;
+};
 
 static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 {
@@ -136,28 +144,73 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 	int threshold_weak = 1000;
 	int threshold_strong = 800;
 	
+	struct matchlist_t matches[TOPLEN];
+	int matches_c = 0;
+	int matches_best = -1;
+	unsigned int matches_best_dif = -1;
+	int matches_worst = -1;
+	unsigned int matches_worst_dif = -1;
+	
+	
 	for (fp = fingerprints; (fp); fp = fp->next) {
-		unsigned long best = -1;
-		unsigned long giveup = threshold_weak*fp->len;
-		
+		unsigned long giveup = threshold_weak*600; //fp->len;
+		unsigned long dif = -1;
 		int x, best_x;
+		
 		for (x = 0; x < len; x += 1) {
-			unsigned long dif = match_single(fp->samples, &samples[x-fp->len], fp->len, giveup);
-			if (dif < best) {
-				best = dif;
+			unsigned long dift = match_single(fp->samples, &samples[x-fp->len], fp->len, giveup);
+			if (dift < dif) {
+				dif = dift;
 				best_x = x;
 			}
 		}
 		
 		//hlog(LOG_DEBUG, "Best match: %ld", best);
-		if (best < threshold_weak) {
+		if (dif < threshold_weak) {
 			hlog(LOG_INFO, "%s wingerprint match, best %lu: %s",
-				(best < threshold_strong) ? "STRONG" : "weak",
-				best, fp->name);
+				(dif < threshold_strong) ? "STRONG" : "weak",
+				dif, fp->name);
 			
-			int add_margin = fp->len/2;
-			notify_out(best, fp, &samples[best_x - fp->len - add_margin], fp->len*2, add_margin);
+			int match_ins = -1;
+			if (matches_c < TOPLEN) {
+				match_ins = matches_c;
+				matches_c++;
+				hlog(LOG_DEBUG, "now have %d matches in buffer", matches_c);
+			} else {
+				if (matches_worst >= 0 && matches_worst_dif < dif) {
+					hlog(LOG_DEBUG, "worse match than the worst, not adding to matches");
+					continue;
+				}
+				
+				/* find second worst */
+				int i;
+				for (i = 0; i < matches_c; i++) {
+				}
+			}
+			
+			if (dif < matches_best_dif) {
+				matches_best = match_ins;
+				matches_best_dif = dif;
+			}
+			if (dif > matches_worst) {
+				matches_worst = match_ins;
+				matches_worst_dif = dif;
+			}
+			
+			matches[match_ins].len = fp->len;
+			matches[match_ins].dif = dif;
+			matches[match_ins].fp = fp;
+			matches[match_ins].x_ofs = best_x;
 		}
+	}
+	
+	if (matches_best >= 0) {
+		hlog(LOG_DEBUG, "best match is %d, dif %lu", matches_best, matches_best_dif);
+		int add_margin = matches[matches_best].fp->len/2;
+		notify_out(matches[matches_best].dif,
+			matches[matches_best].fp,
+			&samples[matches[matches_best].x_ofs - matches[matches_best].fp->len - add_margin],
+			matches[matches_best].fp->len*2, add_margin);
 	}
 	
 	return NULL;
