@@ -39,7 +39,6 @@
 #include "hlog.h"
 #include "hmalloc.h"
 #include "cfg.h"
-#include "cJSON.h"
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -190,16 +189,38 @@ int time_jsonais(time_t *t, char *buf, int buflen)
  *	it to all upstream servers one by one
  */
 
-static void jsonout_post_all(char *json)
+static void jsonout_post_all(struct que_t *q)
 {
 	struct uplink_config_t *up;
 	struct curl_httppost *cpost = NULL, *last = NULL;
+	struct que_t *qp;
+	int n = 0;
+	char name[32];
 	
 	curl_formadd(&cpost, &last,
-		CURLFORM_COPYNAME, "jsonais",
-		CURLFORM_CONTENTTYPE, "application/json",
-		CURLFORM_PTRCONTENTS, json,
+		CURLFORM_COPYNAME, "what",
+		CURLFORM_CONTENTTYPE, "text/plain",
+		CURLFORM_PTRCONTENTS, "edy",
 		CURLFORM_END);
+	
+	for (qp = q; (qp); qp = qp->next) {
+		snprintf(name, 32, "%d", n);
+		curl_formadd(&cpost, &last,
+			CURLFORM_COPYNAME, name,
+			CURLFORM_CONTENTTYPE, "application/json",
+			CURLFORM_PTRCONTENTS, q->s,
+			CURLFORM_END);
+		n++;
+	}
+	
+	snprintf(name, 32, "%d", n);
+	
+	curl_formadd(&cpost, &last,
+		CURLFORM_COPYNAME, "c",
+		CURLFORM_CONTENTTYPE, "text/plain",
+		CURLFORM_PTRCONTENTS, name,
+		CURLFORM_END);
+	
 	
 	for (up = uplink_config; (up); up = up->next)
 		if (up->proto == UPLINK_JSON)
@@ -209,48 +230,29 @@ static void jsonout_post_all(char *json)
 }
 
 /*
- *	export the contents of the buffer splaytree
- */
-
-#define TBUF_LEN 15
-
-static void jsonout_export(void)
-{
-	unsigned int exported = 0;
-	char *json = NULL;
-	time_t now;
-	
-	time(&now);
-	
-	hlog(LOG_DEBUG, "jsonout: %s", json);
-	
-	if (exported) {
-		/* if we have some entries, send them out */
-		jsonout_post_all(json);
-	}
-	
-	hfree(json);
-}
-
-/*
  *	exporting thread
  */
 
 static void jsonout_thread(void *asdf)
 {
-	int i;
 	hlog(LOG_DEBUG, "jsonout: thread started");
 	
 	while (1) {
-		for (i = 0; i < 60; i++) {
-			if (jsonout_die)
-				return;
-			sleep(1);
+		if (jsonout_die)
+			return;
+			
+		usleep(200000);
+		
+		if (out_json_que) {
+			hlog(LOG_DEBUG, "jsonout: grabbing outq");
+			pthread_mutex_lock(&out_json_que_mut);
+			struct que_t *out = out_json_que;
+			out_json_tail = &out_json_que;
+			out_json_que = NULL;
+			pthread_mutex_unlock(&out_json_que_mut);
+			hlog(LOG_DEBUG, "jsonout: posting");
+			jsonout_post_all(out);
 		}
-		
-		hlog(LOG_DEBUG, "jsonout: exporting");
-		
-		jsonout_export();
 	}
 }
 
@@ -288,6 +290,7 @@ int jsonout_push(const char *s)
 	struct que_t *q = hmalloc(sizeof(*q));
 	
 	q->s = s;
+	q->next = NULL;
 	
 	pthread_mutex_lock(&out_json_que_mut);
 	*out_json_tail = q;
@@ -301,7 +304,7 @@ int jsonout_push(const char *s)
 
 int jsonout_init(void)
 {
-	hlog(LOG_CRIT, "jsonout_init: JSON AIS export not available in this build");
+	hlog(LOG_CRIT, "jsonout_init: JSON export not available in this build");
 	return -1;
 }
 

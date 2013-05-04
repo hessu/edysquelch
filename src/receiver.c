@@ -11,6 +11,8 @@
 #include "cfg.h"
 #include "hmalloc.h"
 #include "filter.h"
+#include "out_json.h"
+#include "cJSON.h"
 
 
 static float coeffs[]={
@@ -53,6 +55,28 @@ void free_receiver(struct receiver *rx)
 	}
 }
 
+static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int len, int ofs)
+{
+	cJSON *no = cJSON_CreateObject();
+	
+	cJSON_AddStringToObject(no, "event", "match");
+	cJSON_AddNumberToObject(no, "q", q);
+	
+	cJSON_AddStringToObject(no, "name", fp->name);
+	cJSON_AddItemToObject(no, "fp", cJSON_CreateShortArray(fp->samples, fp->len));
+	cJSON_AddItemToObject(no, "rx", cJSON_CreateShortArray(samples, len));
+	cJSON_AddNumberToObject(no, "rxofs", ofs);
+	cJSON_AddNumberToObject(no, "t", time(NULL));
+	
+	/* the tree is built, print it out to a malloc'ed string */
+	char *out = cJSON_PrintUnformatted(no);
+	cJSON_Delete(no);
+	
+	hlog(LOG_DEBUG, "Notify out: %s", out);
+	
+	jsonout_push(out);
+}
+
 struct fingerprint_t *fingerprints;
 
 static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int len, unsigned long giveup)
@@ -79,17 +103,19 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 {
 	struct fingerprint_t *fp;
 	int threshold_weak = 1000;
-	int threshold_strong = 900;
+	int threshold_strong = 800;
 	
 	for (fp = fingerprints; (fp); fp = fp->next) {
 		unsigned long best = -1;
 		unsigned long giveup = threshold_weak*fp->len;
 		
-		int x;
-		for (x = 0; x < len; x += 4) {
+		int x, best_x;
+		for (x = 0; x < len; x += 1) {
 			unsigned long dif = match_single(fp->samples, &samples[x-fp->len], fp->len, giveup);
-			if (dif < best)
+			if (dif < best) {
 				best = dif;
+				best_x = x;
+			}
 		}
 		
 		//hlog(LOG_DEBUG, "Best match: %ld", best);
@@ -97,6 +123,9 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 			hlog(LOG_INFO, "%s wingerprint match, best %lu: %s",
 				(best < threshold_strong) ? "STRONG" : "weak",
 				best, fp->name);
+			
+			int add_margin = fp->len/2;
+			notify_out(best, fp, &samples[best_x - fp->len - add_margin], fp->len*2, add_margin);
 		}
 	}
 	

@@ -82,6 +82,13 @@ int main(int argc, char *argv[])
 	/* load fingerprints */
 	fingerprints_load(fpdir);
 	
+	/* initialize uplinks */
+	if (uplink_config) {
+		hlog(LOG_DEBUG, "Initializing jsonout...");
+		if (jsonout_init())
+			exit(1);
+	}
+	
 	/* initialize the AIS decoders */
 	if (sound_channels != SOUND_CHANNELS_MONO) {
 		hlog(LOG_DEBUG, "Initializing demodulator A");
@@ -172,6 +179,9 @@ int main(int argc, char *argv[])
 	
 	if (sound_out_fd)
 		fclose(sound_out_fd);
+	
+	if (uplink_config)
+		jsonout_deinit();
 	
 	hfree(buffer);
 	
