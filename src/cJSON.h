@@ -93,6 +93,7 @@ extern cJSON *cJSON_CreateObject(void);
 
 /* These utilities create an Array of count items. */
 extern cJSON *cJSON_CreateIntArray(int *numbers,int count);
+extern cJSON *cJSON_CreateShortArray(short *numbers,int count);
 extern cJSON *cJSON_CreateFloatArray(float *numbers,int count);
 extern cJSON *cJSON_CreateDoubleArray(double *numbers,int count);
 extern cJSON *cJSON_CreateStringArray(const char **strings,int count);
