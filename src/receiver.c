@@ -5,6 +5,9 @@
 
 #include <string.h>
 #include <time.h>
+#include <errno.h>
+#include <strings.h>
+#include <sys/time.h>
 
 #include "receiver.h"
 #include "hlog.h"
@@ -55,10 +58,38 @@ void free_receiver(struct receiver *rx)
 	}
 }
 
+static int event_id(char *buf, int buflen)
+{
+	struct timeval tv;
+	struct tm tm;
+	
+	if (gettimeofday(&tv, NULL) != 0) {
+		hlog(LOG_ERR, "notify_out: gettimeofday failed: %s", strerror(errno));
+		buf[0] = 0;
+		
+		return -1;
+	}
+	gmtime_r(&tv.tv_sec, &tm);
+	
+	int n = snprintf(buf, buflen-1, "%04d%02d%02d-%02d%02d%02d.%03ld",
+		tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+		tm.tm_hour, tm.tm_min, tm.tm_sec,
+		tv.tv_usec / 1000);
+		
+	buf[buflen-1] = 0;
+	
+	return n;
+}
+
 static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int len, int ofs)
 {
+	char id[48];
+	
+	event_id(id, sizeof(id));
+	
 	cJSON *no = cJSON_CreateObject();
 	
+	cJSON_AddStringToObject(no, "id", id);
 	cJSON_AddStringToObject(no, "event", "match");
 	cJSON_AddNumberToObject(no, "q", q);
 	
