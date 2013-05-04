@@ -12,7 +12,11 @@
 
 <p>event seq {{ evq.seq }} que {{ evq.len }}</p>
 
-<div style='height: 230px; width: 600px;' id='graph'></div>
+<div ng-show="shownEvent.id">Event <b>{{ shownEvent.id }}</b>
+	fingerprint <b>{{shownEvent.name}}</b>/[<b>{{shownEvent.fplen}}</b>]
+	diff <b>{{shownEvent.q}}</b></div>
+<div ng-show="shownEvent == undefined"><b>Loading...</b></div>
+<div style='height: 250px; width: 750px;' id='graph'></div>
 
 <h3>Events</h3>
 <table>

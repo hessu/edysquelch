@@ -84,43 +84,6 @@ var ajax_update = function($scope, $http)
 	});
 }
 
-var plotEvent = function(pe) {
-	console.log("row click for " + pe['t']);
-	
-	var fpvals = [];
-	var fp = pe['fp'];
-	for (var i = 0; i < fp.length; i++) {
-		fpvals.push([i, fp[i]]);
-	}
-	
-	var rxvals = [];
-	var rx = pe['rx'];
-	for (var i = 0; i < rx.length; i++) {
-		rxvals.push([i-pe['rxofs'], rx[i]]);
-	}
-	
-	var _d = [
-		{ label: 'received', data: rxvals },
-		{ label: 'fingerprint', data: fpvals }
-	];
-	
-	var _x_opt = {
-	};
-	
-	var _y_opt = {
-	};
-	
-	var _o = {
-		grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20 },
-		legend: { position: 'nw' },
-		colors: [ '#ff0000', '#0000ff' ],
-		xaxis: _x_opt,
-		yaxis: _y_opt
-	};
-	
-	$.plot($('#graph'), _d, _o);
-};
-
 /*
  *	give a go at using AngularJS
  */
@@ -139,7 +102,45 @@ app.filter('datetime', function() { return timestr; });
 app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 	console.log('edyCtrl init');
 	
-	$scope.rowClick = plotEvent;
+	$scope.rowClick = function(pe) {
+		console.log("row click for " + pe['t']);
+		
+		$scope.shownEvent = pe;
+		
+		var fpvals = [];
+		var fp = pe['fp'];
+		for (var i = 0; i < fp.length; i++) {
+			fpvals.push([i, fp[i]]);
+		}
+		
+		var rxvals = [];
+		var rx = pe['rx'];
+		for (var i = 0; i < rx.length; i++) {
+			rxvals.push([i-pe['rxofs'], rx[i]]);
+		}
+		
+		var _d = [
+			{ label: 'received', data: rxvals },
+			{ label: 'fingerprint', data: fpvals }
+		];
+		
+		var _x_opt = {
+		};
+		
+		var _y_opt = {
+		};
+		
+		var _o = {
+			grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20 },
+			legend: { position: 'nw' },
+			colors: [ '#ff0000', '#0000ff' ],
+			xaxis: _x_opt,
+			yaxis: _y_opt
+		};
+		
+		$.plot($('#graph'), _d, _o);
+	};
+	
 	$scope.ev = ev;
 	
 	ajax_update($scope, $http);
