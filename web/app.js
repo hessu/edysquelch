@@ -94,7 +94,7 @@ var handle_upd = function(req, res) {
 		util.log("updating with seq " + seq);
 	} else {
 		if (evq_seq > 0)
-			seq = evq_seq - 1;
+			seq = evq_seq - ((evq_len > 10) ? 10 : evq_len);
 		else
 			seq = 0;
 		
