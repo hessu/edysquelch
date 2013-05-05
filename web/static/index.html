@@ -28,12 +28,23 @@
 <div style='height: 250px; width: 750px;' id='graph'></div>
 
 <div ng-show="rangeSelected">
+<div>
 	<span>Selected sample range {{rangeSelected.from}} ...
-	{{rangeSelected.to}}, {{ (rangeSelected.to - rangeSelected.from) }}
+	{{rangeSelected.to}}, {{ (rangeSelected.to - rangeSelected.from)+1 }}
 	samples, {{ rangeSelected.ms }} msec</span>
 	<button ng-click="rangeZoom(rangeSelected)">Zoom</button>
 	<button ng-click="rangeZoom()">Zoom out</button>
-	<button ng-click="makeFingerprint(rangeSelected)">Create fingerprint</button>
+	<button ng-click="fingerprintCreating=1">Create fingerprint</button>
+</div>
+<div ng-show="fingerprintCreating">
+<form name="createForm">
+<label for="fpname">Name for new fingerprint:</label>
+<input type="text" ng-model="text" ng-pattern="validFpName" required id="fpname" name="fpname" placeholder="n0call"></input>
+<button ng-click="createFingerprint(rangeSelected)">Save fingerprint</button><br />
+<span class="error" ng-show="myForm.input.$error.required">Required!</span>
+<span class="error" ng-show="myForm.input.$error.pattern">Single word only!</span>
+</form>
+</div>
 </div>
 
 <h3>Events</h3>

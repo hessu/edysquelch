@@ -77,9 +77,13 @@ app.filter('datetime', function() { return timestr; });
 app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 	console.log('edyCtrl init');
 	
+	$scope.validFpName = /^\w*$/;
+	
 	var plotEvent = function(pe) {
 		console.log("Plotting event " + pe['t']);
 		
+		$scope.rangeSelected = undefined;
+		$scope.fingerprintCreating = undefined;
 		$scope.shownEvent = pe;
 		
 		if (pe['rxofs'] == undefined)
@@ -157,7 +161,7 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			
 			var opt = pl.getOptions();
 			
-			console.log("opt: " + JSON.stringify(opt.xaxis));
+			//console.log("opt: " + JSON.stringify(opt.xaxis));
 			
 			if (range) {
 				_o.xaxis.min = range.from;
@@ -167,14 +171,31 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 				_o.xaxis.max = null;
 			}
 			
-			console.log("opt: " + JSON.stringify(_o));
+			//console.log("opt: " + JSON.stringify(_o));
 			
 			pl = $.plot(elem, _d, _o);
 		};
 		
-		$scope.makeFingerprint = function(range) {
-			console.log("makeFingerprint");
-			alert('Sorry, we are not quite there yet.');
+		$scope.createFingerprint = function(range) {
+			console.log("createFingerprint");
+			
+			var samples = rx.slice(range.from + pe['rxofs'], range.to + pe['rxofs'] + 1);
+			//console.log("samples: " + JSON.stringify(samples));
+			console.log("name: " + $scope.createForm.fpname);
+			
+			$scope.fingerprintCreating = false;
+			data = {
+				'name': 'asdf',
+				'samples': samples
+			};
+			
+			$http.post('/api/fp/create', data).success(function(d) {
+				console.log('HTTP fingerprint upload successful, status: ' + d['result']);
+			}).error(function(data, status, headers, config) {
+				console.log('HTTP fingerprint upload failed, status: ' + status);
+			});
+			
+			//alert('Sorry, we are not quite there yet.');
 		};
 	};
 	$scope.rowClick = plotEvent;
