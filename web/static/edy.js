@@ -144,10 +144,28 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			legend: { position: 'nw' },
 			colors: [ '#ff0000', '#0000ff' ],
 			xaxis: _x_opt,
-			yaxis: _y_opt
+			yaxis: _y_opt,
+			selection: { mode: "x" }
 		};
 		
-		$.plot($('#graph'), _d, _o);
+		var elem = $('#graph');
+		
+		$.plot(elem, _d, _o);
+		
+		/* selection event handlers */
+		elem.bind("plotselected", function (event, ranges) {
+			console.log("plotselected");
+			$scope.rangeSelected = {
+				'from': ranges.xaxis.from.toFixed(0),
+				'to': ranges.xaxis.to.toFixed(0)
+			};
+			$scope.$apply();
+		});
+		elem.bind("plotunselected", function (event, ranges) {
+			console.log("plotunselected");
+			$scope.rangeSelected = undefined;
+			$scope.$apply();
+		});
 	};
 	
 	$scope.ev = ev;

@@ -27,6 +27,9 @@
 <div ng-show="shownEvent == undefined"><b>Loading...</b></div>
 <div style='height: 250px; width: 750px;' id='graph'></div>
 
+<div ng-show="rangeSelected">Range selected: {{rangeSelected.from}} ... {{rangeSelected.to}}</div>
+
+
 <h3>Events</h3>
 <table>
 <tr><th>Time</th>
@@ -46,6 +49,7 @@
 <script type='text/JavaScript' src='jquery.min.js'></script>
 <!--[if lte IE 8]><script type='text/JavaScript' src='excanvas.min.js'></script><![endif]-->
 <script type='text/JavaScript' src='jquery.flot.min.js'></script>
+<script type='text/JavaScript' src='jquery.flot.selection.min.js'></script>
 <script type='text/JavaScript' src='edy.js'></script>
 
 </body>
