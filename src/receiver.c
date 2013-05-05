@@ -85,6 +85,17 @@ static int event_id(char *buf, int buflen)
 	return n;
 }
 
+static void notify_queue(cJSON *no)
+{
+	/* the tree is built, print it out to a malloc'ed string */
+	char *out = cJSON_PrintUnformatted(no);
+	cJSON_Delete(no);
+	
+	hlog(LOG_DEBUG, "Notification queued"); //: %s", out);
+	
+	jsonout_push(out);
+}
+
 static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int len, int ofs)
 {
 	char id[48];
@@ -104,13 +115,23 @@ static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int le
 	cJSON_AddNumberToObject(no, "rxofs", ofs);
 	cJSON_AddNumberToObject(no, "t", time(NULL));
 	
-	/* the tree is built, print it out to a malloc'ed string */
-	char *out = cJSON_PrintUnformatted(no);
-	cJSON_Delete(no);
+	notify_queue(no);
+}
+
+static void notify_out_sql(int16_t *samples, int len)
+{
+	char id[48];
 	
-	hlog(LOG_DEBUG, "Notify out"); //: %s", out);
+	event_id(id, sizeof(id));
 	
-	jsonout_push(out);
+	cJSON *no = cJSON_CreateObject();
+	
+	cJSON_AddStringToObject(no, "id", id);
+	cJSON_AddStringToObject(no, "event", "sql");
+	cJSON_AddItemToObject(no, "rx", cJSON_CreateShortArray(samples, len));
+	cJSON_AddNumberToObject(no, "t", time(NULL));
+	
+	notify_queue(no);
 }
 
 struct fingerprint_t *fingerprints;
@@ -246,8 +267,9 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 				sql_bit = 0;
 				unsigned long sstep = sql_pos - sql_last_high;
 				sql_last_high = sql_pos;
-				if (sql_step_avg < 100) {
-					sql_step_avg += 2;
+				
+				if (sql_step_avg < 30) {
+					sql_step_avg += 1;
 				} else {
 					if (sql_open) {
 						sql_open = 0;
@@ -266,11 +288,12 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 		if (sql_red_step == 30) {
 			sql_red_step = 0;
 			if (sql_step_avg > 0) {
-				sql_step_avg -= 2;
+				sql_step_avg -= 1;
 			} else {
 				if (!sql_open) {
 					sql_open = 1;
-					hlog(LOG_INFO, "SQL opened");
+					hlog(LOG_INFO, "SQL opened, last noise %ld samples ago", sql_pos - sql_last_high);
+					notify_out_sql(&out[od-1500], 1500);
 				}
 			}
 		}
@@ -308,7 +331,7 @@ void receiver_run(struct receiver *rx, short *buf, int len)
 	
 	int copied = copy_buffer(buf, &rx->buffer[rx->bufpos], rx_num_ch, len, &maxval);
 	
-	search_fingerprints(&rx->buffer[rx->bufpos], len);
+	//search_fingerprints(&rx->buffer[rx->bufpos], len);
 	rx->bufpos += copied;
 	
 	/* calculate level, and log it */

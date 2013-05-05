@@ -107,11 +107,8 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 		
 		$scope.shownEvent = pe;
 		
-		var fpvals = [];
-		var fp = pe['fp'];
-		for (var i = 0; i < fp.length; i++) {
-			fpvals.push([i, fp[i]]);
-		}
+		if (pe['rxofs'] == undefined)
+			pe['rxofs'] = 0;
 		
 		var rxvals = [];
 		var rx = pe['rx'];
@@ -120,9 +117,18 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 		}
 		
 		var _d = [
-			{ label: 'received', data: rxvals },
-			{ label: 'fingerprint', data: fpvals }
+			{ label: 'received', data: rxvals }
+			
 		];
+		
+		if (pe['fp']) {
+			var fpvals = [];
+			var fp = pe['fp'];
+			for (var i = 0; i < fp.length; i++) {
+				fpvals.push([i, fp[i]]);
+			}
+			_d.push({ label: 'fingerprint', data: fpvals });
+		}
 		
 		var _x_opt = {
 		};
