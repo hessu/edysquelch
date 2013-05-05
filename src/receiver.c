@@ -46,6 +46,10 @@ struct receiver *init_receiver(char name, int num_ch, int ch_ofs)
 	rx->last_levellog = 0;
 	
 	rx->bufpos = RECEIVER_BUFLEN/4;
+	
+	int i;
+	for (i = 0; i < RECEIVER_BUFLEN; i++)
+		rx->buffer[i] = -16000;
 
 	return rx;
 }
@@ -216,20 +220,66 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 	return NULL;
 }
 
+static int sql_open = 0;
+
+#define SQL_YRANGE_HIGH 5000
+#define SQL_YRANGE_LOW -10000
+#define SQL_NUM_STEPS 100
+
 static int copy_buffer(short *in, short *out, int step, int len, short *maxval_out)
 {
 	int id = 0;
 	int od = 0;
 	short maxval = 0;
+	short cur;
+	static unsigned long sql_pos, sql_last_high, sql_bit, sql_step_avg;
+	unsigned int sql_step = 0;
+	static unsigned int sql_red_step;
 	
 	while (od < len) {
-		out[od] = in[id];
-		if (in[id] > maxval)
-			maxval = in[id];
+		out[od] = cur = in[id];
+		if (cur > maxval)
+			maxval = cur;
+		
+		if (sql_bit == 1) {
+			if (cur < SQL_YRANGE_LOW) {
+				sql_bit = 0;
+				unsigned long sstep = sql_pos - sql_last_high;
+				sql_last_high = sql_pos;
+				if (sql_step_avg < 100) {
+					sql_step_avg += 2;
+				} else {
+					if (sql_open) {
+						sql_open = 0;
+						hlog(LOG_INFO, "SQL closed");
+					}
+				}
+			}
+		} else {
+			if (cur > SQL_YRANGE_HIGH) {
+				sql_bit = 1;
+			}
+		}
+		
+		sql_pos++;
+		sql_red_step++;
+		if (sql_red_step == 30) {
+			sql_red_step = 0;
+			if (sql_step_avg > 0) {
+				sql_step_avg -= 2;
+			} else {
+				if (!sql_open) {
+					sql_open = 1;
+					hlog(LOG_INFO, "SQL opened");
+				}
+			}
+		}
 		
 		id += step;
 		od++;
 	}
+	
+	hlog(LOG_DEBUG, "sql_step_avg: %d", sql_step_avg);
 	
 	*maxval_out = maxval;
 	return od;
@@ -251,12 +301,13 @@ void receiver_run(struct receiver *rx, short *buf, int len)
 		abort();
 	
 #define RECEIVER_BUF_COPY (RECEIVER_BUFLEN/4)
-	if (rx->bufpos + len/rx_num_ch > RECEIVER_BUFLEN) {
-		memcpy(rx->buffer, &rx->buffer[RECEIVER_BUF_COPY*3], RECEIVER_BUF_COPY*sizeof(uint16_t));
+	if (rx->bufpos + len/rx_num_ch > RECEIVER_BUFLEN) { 
+		memcpy(rx->buffer, &rx->buffer[rx->bufpos - RECEIVER_BUF_COPY], RECEIVER_BUF_COPY*sizeof(uint16_t));
 		rx->bufpos = RECEIVER_BUF_COPY;
 	}
 	
 	int copied = copy_buffer(buf, &rx->buffer[rx->bufpos], rx_num_ch, len, &maxval);
+	
 	search_fingerprints(&rx->buffer[rx->bufpos], len);
 	rx->bufpos += copied;
 	
