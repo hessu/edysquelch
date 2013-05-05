@@ -149,23 +149,51 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 		};
 		
 		var elem = $('#graph');
-		
-		$.plot(elem, _d, _o);
+		var pl = $.plot(elem, _d, _o);
 		
 		/* selection event handlers */
 		elem.bind("plotselected", function (event, ranges) {
 			console.log("plotselected");
+			var to = parseInt(ranges.xaxis.to.toFixed(0));
+			var from = parseInt(ranges.xaxis.from.toFixed(0));
 			$scope.rangeSelected = {
-				'from': ranges.xaxis.from.toFixed(0),
-				'to': ranges.xaxis.to.toFixed(0)
+				'from': from,
+				'to': to,
+				'ms': ((to-from) / 48000 * 1000).toFixed(3)
 			};
 			$scope.$apply();
 		});
+		
 		elem.bind("plotunselected", function (event, ranges) {
 			console.log("plotunselected");
 			$scope.rangeSelected = undefined;
 			$scope.$apply();
 		});
+		
+		$scope.rangeZoom = function(range) {
+			console.log("rangeZoom");
+			
+			var opt = pl.getOptions();
+			
+			console.log("opt: " + JSON.stringify(opt.xaxis));
+			
+			if (range) {
+				_o.xaxis.min = range.from;
+				_o.xaxis.max = range.to;
+			} else {
+				_o.xaxis.min = null;
+				_o.xaxis.max = null;
+			}
+			
+			console.log("opt: " + JSON.stringify(_o));
+			
+			pl = $.plot(elem, _d, _o);
+		};
+		
+		$scope.makeFingerprint = function(range) {
+			console.log("makeFingerprint");
+			alert('Sorry, we are not quite there yet.');
+		};
 	};
 	
 	$scope.ev = ev;

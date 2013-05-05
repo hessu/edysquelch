@@ -27,8 +27,14 @@
 <div ng-show="shownEvent == undefined"><b>Loading...</b></div>
 <div style='height: 250px; width: 750px;' id='graph'></div>
 
-<div ng-show="rangeSelected">Range selected: {{rangeSelected.from}} ... {{rangeSelected.to}}</div>
-
+<div ng-show="rangeSelected">
+	<span>Selected sample range {{rangeSelected.from}} ...
+	{{rangeSelected.to}}, {{ (rangeSelected.to - rangeSelected.from) }}
+	samples, {{ rangeSelected.ms }} msec</span>
+	<button ng-click="rangeZoom(rangeSelected)">Zoom</button>
+	<button ng-click="rangeZoom()">Zoom out</button>
+	<button ng-click="makeFingerprint(rangeSelected)">Create fingerprint</button>
+</div>
 
 <h3>Events</h3>
 <table>
