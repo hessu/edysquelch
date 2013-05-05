@@ -59,34 +59,6 @@ function dur_str(i)
 var evq = {};
 var ev = [];
 
-var ajax_update = function($scope, $http)
-{
-	var config = {
-		'params': {}
-	};
-	
-	if (evq['seq'] > 0) {
-		config['params']['seq'] = evq['seq'];
-	}
-	
-	$http.get('/api/upd', config).success(function(d) {
-		console.log('HTTP update received, status: ' + d['result']);
-		
-		$scope.evq = evq = d['evq'];
-		
-		for (var i in d['ev']) {
-			ev.unshift(d['ev'][i]);
-		}
-		
-		//$scope.ev = ev;
-		
-		setTimeout(function() { ajax_update($scope, $http); }, 1200);
-	}).error(function(data, status, headers, config) {
-		console.log('HTTP update failed, status: ' + status);
-		setTimeout(function() { ajax_update($scope, $http); }, 1200);
-	});
-}
-
 /*
  *	give a go at using AngularJS
  */
@@ -105,8 +77,8 @@ app.filter('datetime', function() { return timestr; });
 app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 	console.log('edyCtrl init');
 	
-	$scope.rowClick = function(pe) {
-		console.log("row click for " + pe['t']);
+	var plotEvent = function(pe) {
+		console.log("Plotting event " + pe['t']);
 		
 		$scope.shownEvent = pe;
 		
@@ -195,8 +167,36 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			alert('Sorry, we are not quite there yet.');
 		};
 	};
-	
+	$scope.rowClick = plotEvent;
 	$scope.ev = ev;
+	
+	var ajax_update = function($scope, $http) {
+		var config = {
+			'params': {}
+		};
+		
+		if (evq['seq'] > 0) {
+			config['params']['seq'] = evq['seq'];
+		}
+		
+		$http.get('/api/upd', config).success(function(d) {
+			console.log('HTTP update received, status: ' + d['result']);
+			
+			$scope.evq = evq = d['evq'];
+			
+			if (d['ev']) {
+				for (var i in d['ev'])
+					ev.unshift(d['ev'][i]);
+				
+				plotEvent(ev[0]);
+			}
+			
+			setTimeout(function() { ajax_update($scope, $http); }, 1200);
+		}).error(function(data, status, headers, config) {
+			console.log('HTTP update failed, status: ' + status);
+			setTimeout(function() { ajax_update($scope, $http); }, 1200);
+		});
+	};
 	
 	ajax_update($scope, $http);
 }]);
