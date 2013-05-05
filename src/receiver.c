@@ -96,7 +96,7 @@ static void notify_queue(cJSON *no)
 	jsonout_push(out);
 }
 
-static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int len, int ofs)
+static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int len, int ofs, int last_noise)
 {
 	char id[48];
 	
@@ -106,6 +106,8 @@ static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int le
 	
 	cJSON_AddStringToObject(no, "id", id);
 	cJSON_AddStringToObject(no, "event", "match");
+	cJSON_AddNumberToObject(no, "t", time(NULL));
+	
 	cJSON_AddNumberToObject(no, "q", q);
 	cJSON_AddNumberToObject(no, "fplen", fp->len);
 	
@@ -113,12 +115,12 @@ static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int le
 	cJSON_AddItemToObject(no, "fp", cJSON_CreateShortArray(fp->samples, fp->len));
 	cJSON_AddItemToObject(no, "rx", cJSON_CreateShortArray(samples, len));
 	cJSON_AddNumberToObject(no, "rxofs", ofs);
-	cJSON_AddNumberToObject(no, "t", time(NULL));
+	cJSON_AddNumberToObject(no, "lnoise", last_noise);
 	
 	notify_queue(no);
 }
 
-static void notify_out_sql(int16_t *samples, int len)
+static void notify_out_sql(int16_t *samples, int len, int last_noise)
 {
 	char id[48];
 	
@@ -128,8 +130,10 @@ static void notify_out_sql(int16_t *samples, int len)
 	
 	cJSON_AddStringToObject(no, "id", id);
 	cJSON_AddStringToObject(no, "event", "sql");
-	cJSON_AddItemToObject(no, "rx", cJSON_CreateShortArray(samples, len));
 	cJSON_AddNumberToObject(no, "t", time(NULL));
+	
+	cJSON_AddNumberToObject(no, "lnoise", last_noise);
+	cJSON_AddItemToObject(no, "rx", cJSON_CreateShortArray(samples, len));
 	
 	notify_queue(no);
 }
@@ -163,7 +167,7 @@ struct matchlist_t {
 	struct fingerprint_t *fp;
 };
 
-static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
+static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int last_noise)
 {
 	struct fingerprint_t *fp;
 	int threshold_weak = 1000;
@@ -232,10 +236,11 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 	if (matches_best >= 0) {
 		hlog(LOG_DEBUG, "best match is %d, dif %lu", matches_best, matches_best_dif);
 		int add_margin = matches[matches_best].fp->len/2;
+		int sample_ofs = matches[matches_best].x_ofs - matches[matches_best].fp->len - add_margin;
 		notify_out(matches[matches_best].dif,
 			matches[matches_best].fp,
-			&samples[matches[matches_best].x_ofs - matches[matches_best].fp->len - add_margin],
-			matches[matches_best].fp->len*2, add_margin);
+			&samples[sample_ofs],
+			matches[matches_best].fp->len*2, add_margin, last_noise-sample_ofs);
 			
 		return matches[matches_best].fp;
 	}
@@ -255,7 +260,8 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 	int od = 0;
 	short maxval = 0;
 	short cur;
-	static unsigned long sql_pos, sql_last_high, sql_bit, sql_step_avg;
+	static unsigned long sql_pos, sql_last_high; // TODO: These are going to overflow, with unseen consequences
+	static unsigned long sql_bit, sql_step_avg;
 	static unsigned int sql_red_step;
 	
 	while (od < len) {
@@ -294,8 +300,9 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 					sql_open = 1;
 					hlog(LOG_INFO, "SQL opened, last noise %ld samples ago", sql_pos - sql_last_high);
 #define SQL_OPEN_SCAN_LEN 1500
-					if (search_fingerprints(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN) == NULL)
-						notify_out_sql(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN);
+					int last_noise_ofs = SQL_OPEN_SCAN_LEN - (sql_pos-sql_last_high);
+					if (search_fingerprints(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs) == NULL)
+						notify_out_sql(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs);
 				}
 			}
 		}

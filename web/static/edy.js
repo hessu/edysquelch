@@ -111,8 +111,18 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 		var _y_opt = {
 		};
 		
+		var _mark = [
+		];
+		
+		if (pe['lnoise']) {
+			console.log("rxofs " + pe['rxofs'] + " plotting lnoise marker at " + pe['lnoise']);
+			_mark.push({
+				color: '#2db543', lineWidth: 1, xaxis: { from: pe['lnoise'] - pe['rxofs'], to: pe['lnoise'] - pe['rxofs'] }
+			});
+		}
+		
 		var _o = {
-			grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20 },
+			grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20, markings: _mark },
 			legend: { position: 'nw' },
 			colors: [ '#ff0000', '#0000ff' ],
 			xaxis: _x_opt,
