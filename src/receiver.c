@@ -236,6 +236,8 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len)
 			matches[matches_best].fp,
 			&samples[matches[matches_best].x_ofs - matches[matches_best].fp->len - add_margin],
 			matches[matches_best].fp->len*2, add_margin);
+			
+		return matches[matches_best].fp;
 	}
 	
 	return NULL;
@@ -254,7 +256,6 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 	short maxval = 0;
 	short cur;
 	static unsigned long sql_pos, sql_last_high, sql_bit, sql_step_avg;
-	unsigned int sql_step = 0;
 	static unsigned int sql_red_step;
 	
 	while (od < len) {
@@ -265,7 +266,6 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 		if (sql_bit == 1) {
 			if (cur < SQL_YRANGE_LOW) {
 				sql_bit = 0;
-				unsigned long sstep = sql_pos - sql_last_high;
 				sql_last_high = sql_pos;
 				
 				if (sql_step_avg < 40) {
@@ -293,7 +293,9 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 				if (!sql_open) {
 					sql_open = 1;
 					hlog(LOG_INFO, "SQL opened, last noise %ld samples ago", sql_pos - sql_last_high);
-					notify_out_sql(&out[od-1500], 1500);
+#define SQL_OPEN_SCAN_LEN 1500
+					if (search_fingerprints(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN) == NULL)
+						notify_out_sql(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN);
 				}
 			}
 		}
