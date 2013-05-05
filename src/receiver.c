@@ -15,6 +15,7 @@
 #include "hmalloc.h"
 #include "filter.h"
 #include "out_json.h"
+#include "fingerpori.h"
 #include "cJSON.h"
 
 
@@ -252,7 +253,7 @@ static int sql_open = 0;
 
 #define SQL_YRANGE_HIGH 5000
 #define SQL_YRANGE_LOW -10000
-#define SQL_NUM_STEPS 100
+#define SQL_OPEN_SCAN_LEN 1500
 
 static int copy_buffer(short *in, short *out, int step, int len, short *maxval_out)
 {
@@ -263,6 +264,7 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 	static unsigned long sql_pos, sql_last_high; // TODO: These are going to overflow, with unseen consequences
 	static unsigned long sql_bit, sql_step_avg;
 	static unsigned int sql_red_step;
+	short filtered_samples[SQL_OPEN_SCAN_LEN];
 	
 	while (od < len) {
 		out[od] = cur = in[id];
@@ -299,10 +301,14 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 				if (!sql_open) {
 					sql_open = 1;
 					hlog(LOG_INFO, "SQL opened, last noise %ld samples ago", sql_pos - sql_last_high);
-#define SQL_OPEN_SCAN_LEN 1500
 					int last_noise_ofs = SQL_OPEN_SCAN_LEN - (sql_pos-sql_last_high);
-					if (search_fingerprints(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs) == NULL)
-						notify_out_sql(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs);
+					
+					sample_filter_avg(filtered_samples, &out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN);
+					
+					if (search_fingerprints(filtered_samples, SQL_OPEN_SCAN_LEN, last_noise_ofs) == NULL)
+						notify_out_sql(filtered_samples, SQL_OPEN_SCAN_LEN, last_noise_ofs);
+					//if (search_fingerprints(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs) == NULL)
+					//	notify_out_sql(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs);
 				}
 			}
 		}
@@ -311,7 +317,7 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 		od++;
 	}
 	
-	hlog(LOG_DEBUG, "sql_step_avg: %d", sql_step_avg);
+	//hlog(LOG_DEBUG, "sql_step_avg: %d", sql_step_avg);
 	
 	*maxval_out = maxval;
 	return od;
