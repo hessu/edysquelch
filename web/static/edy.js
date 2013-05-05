@@ -70,7 +70,7 @@ var ajax_update = function($scope, $http)
 	}
 	
 	$http.get('/api/upd', config).success(function(d) {
-		console.log('NG got status: ' + d['result']);
+		console.log('HTTP update received, status: ' + d['result']);
 		
 		$scope.evq = evq = d['evq'];
 		
@@ -80,6 +80,9 @@ var ajax_update = function($scope, $http)
 		
 		//$scope.ev = ev;
 		
+		setTimeout(function() { ajax_update($scope, $http); }, 1200);
+	}).error(function(data, status, headers, config) {
+		console.log('HTTP update failed, status: ' + status);
 		setTimeout(function() { ajax_update($scope, $http); }, 1200);
 	});
 }
