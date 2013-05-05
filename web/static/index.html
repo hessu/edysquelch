@@ -15,8 +15,8 @@
 <div ng-show="shownEvent.id">Event <b>{{ shownEvent.id }}</b>
 
 	<span ng-show="shownEvent.event == 'match'">
-	fingerprint <b>{{shownEvent.name}}</b>/[<b>{{shownEvent.fplen}}</b>]
-	diff <b>{{shownEvent.q}}</b>
+	matches fingerprint <b>{{shownEvent.name}}</b>/[<b>{{shownEvent.fplen}}</b>]
+	with difference of <b>{{shownEvent.q}}</b>
 	</span>
 	
 	<span ng-show="shownEvent.event == 'sql'">
