@@ -268,13 +268,13 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 				unsigned long sstep = sql_pos - sql_last_high;
 				sql_last_high = sql_pos;
 				
-				if (sql_step_avg < 30) {
+				if (sql_step_avg < 40) {
 					sql_step_avg += 1;
-				} else {
-					if (sql_open) {
-						sql_open = 0;
-						hlog(LOG_INFO, "SQL closed");
-					}
+				}
+				
+				if (sql_open && sql_step_avg > 30) {
+					sql_open = 0;
+					hlog(LOG_INFO, "SQL closed");
 				}
 			}
 		} else {
