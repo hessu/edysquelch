@@ -64,6 +64,8 @@ int fork_a_daemon;	/* fork a daemon */
 int stats_interval;
 int expiry_interval;
 
+unsigned long kerchunk_length = 2000; /* milliseconds */
+
 int verbose;
 
 struct uplink_config_t *uplink_config;

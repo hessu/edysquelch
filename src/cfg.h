@@ -45,6 +45,8 @@ extern int dump_requests;	/* print requests */
 extern int stats_interval;
 extern int expiry_interval;
 
+extern unsigned long kerchunk_length; /* milliseconds */
+
 extern int verbose;
 
 extern char *sound_device;
