@@ -97,17 +97,18 @@ static void notify_queue(cJSON *no)
 	jsonout_push(out);
 }
 
+char current_event_id[48];
+
 static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int len, int ofs, int last_noise)
 {
-	char id[48];
-	
-	event_id(id, sizeof(id));
+	event_id(current_event_id, sizeof(current_event_id));
 	
 	cJSON *no = cJSON_CreateObject();
 	
-	cJSON_AddStringToObject(no, "id", id);
+	cJSON_AddStringToObject(no, "id", current_event_id);
 	cJSON_AddStringToObject(no, "event", "match");
 	cJSON_AddNumberToObject(no, "t", time(NULL));
+	cJSON_AddNumberToObject(no, "duration", -1);
 	
 	cJSON_AddNumberToObject(no, "q", q);
 	cJSON_AddNumberToObject(no, "fplen", fp->len);
@@ -123,18 +124,30 @@ static void notify_out(int q, struct fingerprint_t *fp, int16_t *samples, int le
 
 static void notify_out_sql(int16_t *samples, int len, int last_noise)
 {
-	char id[48];
-	
-	event_id(id, sizeof(id));
+	event_id(current_event_id, sizeof(current_event_id));
 	
 	cJSON *no = cJSON_CreateObject();
 	
-	cJSON_AddStringToObject(no, "id", id);
+	cJSON_AddStringToObject(no, "id", current_event_id);
 	cJSON_AddStringToObject(no, "event", "sql");
 	cJSON_AddNumberToObject(no, "t", time(NULL));
+	cJSON_AddNumberToObject(no, "duration", -1);
 	
 	cJSON_AddNumberToObject(no, "lnoise", last_noise);
 	cJSON_AddItemToObject(no, "rx", cJSON_CreateShortArray(samples, len));
+	
+	notify_queue(no);
+}
+
+static void notify_out_over_end(unsigned long duration)
+{
+	cJSON *no = cJSON_CreateObject();
+	
+	cJSON_AddStringToObject(no, "id", current_event_id);
+	cJSON_AddStringToObject(no, "event", "sqlend");
+	cJSON_AddNumberToObject(no, "t", time(NULL));
+	
+	cJSON_AddNumberToObject(no, "duration", duration);
 	
 	notify_queue(no);
 }
@@ -149,15 +162,16 @@ static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int le
 	int i;
 	
 	for (i = 0; i < len; i++) {
-		dif_sum += abs(samples[i] - fingerprint[i]);
+		unsigned long a = abs(samples[i] - fingerprint[i]);
+		dif_sum += a *  ((32768-abs(fingerprint[i]))/4096); // a*a ?
 		if (dif_sum > giveup)
 			return -1;
 	}
 	
 	/* match goodness is the sum of absolute sample differences divided by amount of samples
-	 * (length of fingerprint)
+	 * (length of fingerprint).
 	 */
-	return dif_sum / (len*1.3);
+	return dif_sum;
 }
 
 #define TOPLEN 5
@@ -171,8 +185,8 @@ struct matchlist_t {
 static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int last_noise)
 {
 	struct fingerprint_t *fp;
-	int threshold_weak = 900;
-	int threshold_strong = 700;
+	int threshold_weak = 1100;
+	int threshold_strong = 600;
 	
 	struct matchlist_t matches[TOPLEN];
 	int matches_c = 0;
@@ -181,9 +195,8 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int 
 	int matches_worst = -1;
 	unsigned int matches_worst_dif = -1;
 	
-	
 	for (fp = fingerprints; (fp); fp = fp->next) {
-		unsigned long giveup = threshold_weak*600; //fp->len;
+		unsigned long giveup = threshold_weak*(fp->len*2);
 		unsigned long dif = -1;
 		int x, best_x;
 		
@@ -194,6 +207,8 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int 
 				best_x = x;
 			}
 		}
+		
+		dif = dif / (fp->len*3);
 		
 		//hlog(LOG_DEBUG, "Best match: %ld", best);
 		if (dif < threshold_weak) {
@@ -253,7 +268,7 @@ static int sql_open = 0;
 
 #define SQL_YRANGE_HIGH 5000
 #define SQL_YRANGE_LOW -10000
-#define SQL_OPEN_SCAN_LEN 1500
+#define SQL_OPEN_SCAN_LEN 2000
 
 static int copy_buffer(short *in, short *out, int step, int len, short *maxval_out)
 {
@@ -264,6 +279,7 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 	static unsigned long sql_pos, sql_last_high; // TODO: These are going to overflow, with unseen consequences
 	static unsigned long sql_bit, sql_step_avg;
 	static unsigned int sql_red_step;
+	static unsigned long sql_open_at_pos;
 	short filtered_samples[SQL_OPEN_SCAN_LEN];
 	
 	while (od < len) {
@@ -282,7 +298,10 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 				
 				if (sql_open && sql_step_avg > 30) {
 					sql_open = 0;
-					hlog(LOG_INFO, "SQL closed");
+					// TODO: handle overflow
+					unsigned long over_length = ((sql_pos - sql_open_at_pos) * 1000) / 48000;
+					hlog(LOG_INFO, "SQL closed, over length %.3f s", (float)over_length / 1000);
+					notify_out_over_end(over_length);
 				}
 			}
 		} else {
@@ -300,6 +319,7 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 			} else {
 				if (!sql_open) {
 					sql_open = 1;
+					sql_open_at_pos = sql_pos;
 					hlog(LOG_INFO, "SQL opened, last noise %ld samples ago", sql_pos - sql_last_high);
 					int last_noise_ofs = SQL_OPEN_SCAN_LEN - (sql_pos-sql_last_high);
 					
