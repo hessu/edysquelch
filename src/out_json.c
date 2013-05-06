@@ -208,7 +208,7 @@ static void jsonout_post_all(struct que_t *q)
 		curl_formadd(&cpost, &last,
 			CURLFORM_COPYNAME, name,
 			CURLFORM_CONTENTTYPE, "application/json",
-			CURLFORM_PTRCONTENTS, q->s,
+			CURLFORM_PTRCONTENTS, qp->s,
 			CURLFORM_END);
 		n++;
 	}
