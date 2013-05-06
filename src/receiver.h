@@ -11,6 +11,7 @@ struct fingerprint_t {
 	int16_t *samples;
 	int len;
 	unsigned long ampl_avg;
+	int ampl_max;
 	
 	time_t loaded;
 	

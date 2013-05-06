@@ -42,6 +42,20 @@ unsigned long sample_amplitude_sum(int16_t *src, int len)
 	return sum;
 }
 
+unsigned int sample_amplitude_max(int16_t *src, int len)
+{
+	unsigned long peak = 0;
+	int i;
+	
+	for (i = 0; i < len; i++) {
+		unsigned long a = abs(src[len]);
+		if (a > peak)
+			peak = a;
+	}
+	
+	return peak;
+}
+
 struct fingerprint_t *fingerprint_alloc(void)
 {
 	struct fingerprint_t *fp = hmalloc(sizeof(*fp));
@@ -120,6 +134,7 @@ static int fingerprint_load(const char *d, const char *f)
 	}
 	
 	fp->ampl_avg = sample_amplitude_sum(fp->samples, fp->len) / fp->len;
+	fp->ampl_max = sample_amplitude_max(fp->samples, fp->len);
 	
 	hlog(LOG_INFO, "Loaded fingerprint file %s: %d bytes, %d samples, ampl_avg %lu", fn, nread, fp->len, fp->ampl_avg);
 	
