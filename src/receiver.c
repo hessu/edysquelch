@@ -157,7 +157,7 @@ static unsigned long match_single(int16_t *fingerprint, int16_t *samples, int le
 	/* match goodness is the sum of absolute sample differences divided by amount of samples
 	 * (length of fingerprint)
 	 */
-	return dif_sum / len;
+	return dif_sum / (len*1.3);
 }
 
 #define TOPLEN 5
@@ -171,8 +171,8 @@ struct matchlist_t {
 static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int last_noise)
 {
 	struct fingerprint_t *fp;
-	int threshold_weak = 1000;
-	int threshold_strong = 800;
+	int threshold_weak = 900;
+	int threshold_strong = 700;
 	
 	struct matchlist_t matches[TOPLEN];
 	int matches_c = 0;

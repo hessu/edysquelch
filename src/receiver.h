@@ -10,6 +10,7 @@ struct fingerprint_t {
 	char *name;
 	int16_t *samples;
 	int len;
+	unsigned long ampl_avg;
 	
 	time_t loaded;
 	

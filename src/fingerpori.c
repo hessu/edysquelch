@@ -13,20 +13,10 @@
 #include "hlog.h"
 #include "hmalloc.h"
 
-#define FILTER_AVG_LEN 16
-void sample_filter_avg(int16_t *dst, int16_t *src, int len)
+#define FILTER_AVG_LEN 24
+int sample_filter_avg(int16_t *dst, int16_t *src, int len)
 {
 	int i;
-	
-	for (i = 0; i < FILTER_AVG_LEN && i < len; i++) {
-		long sum = 0;
-		int d;
-		
-		for (d = 0; d <= i; d++)
-			sum += src[d];
-			
-		dst[i] = sum / FILTER_AVG_LEN;
-	}
 	
 	for (i = FILTER_AVG_LEN; i < len; i++) {
 		long sum = 0;
@@ -35,8 +25,21 @@ void sample_filter_avg(int16_t *dst, int16_t *src, int len)
 		for (d = i - FILTER_AVG_LEN+1; d <= i; d++)
 			sum += src[d];
 			
-		dst[i] = sum / FILTER_AVG_LEN;
+		dst[i-FILTER_AVG_LEN] = sum / FILTER_AVG_LEN;
 	}
+	
+	return i-FILTER_AVG_LEN;
+}
+
+unsigned long sample_amplitude_sum(int16_t *src, int len)
+{
+	unsigned long sum;
+	int i;
+	
+	for (i = 0; i < len; i++)
+		sum += abs(src[len]);
+	
+	return sum;
 }
 
 struct fingerprint_t *fingerprint_alloc(void)
@@ -107,15 +110,18 @@ static int fingerprint_load(const char *d, const char *f)
 	fp->len = nread/sizeof(fp->samples[0]);
 	
 	ret = 0;
-	hlog(LOG_INFO, "Loaded fingerprint file %s: %d bytes, %d samples", fn, nread, fp->len);
 	
 	if (strstr(fn, "unfiltered") != NULL) {
 		hlog(LOG_INFO, "Filtering unfiltered fingerprint: %s", fn);
 		int16_t *tp = hmalloc(st.st_size);
-		sample_filter_avg(tp, fp->samples, fp->len);
+		fp->len = sample_filter_avg(tp, fp->samples, fp->len);
 		memcpy(fp->samples, tp, st.st_size);
 		hfree(tp);
 	}
+	
+	fp->ampl_avg = sample_amplitude_sum(fp->samples, fp->len) / fp->len;
+	
+	hlog(LOG_INFO, "Loaded fingerprint file %s: %d bytes, %d samples, ampl_avg %lu", fn, nread, fp->len, fp->ampl_avg);
 	
 	/* put to linked list */
 	fp->next = fingerprints;
