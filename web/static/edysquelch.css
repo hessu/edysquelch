@@ -49,6 +49,17 @@ td.ar {
 	text-align: right;
 }
 
+table.events tbody tr {
+	cursor: pointer;
+}
+
+table.events tbody tr.selected td {
+	background-color: #53ccff;
+}
+
+table.events tbody tr.keydown td {
+	background-color: #ff6c6c;
+}
 
 /* message */
 div.msg_e {

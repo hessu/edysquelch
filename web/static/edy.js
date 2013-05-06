@@ -56,6 +56,47 @@ function dur_str(i)
 	return i.toFixed(0) + 's';
 }
 
+function dur_str_ms(i)
+{
+	if (i === undefined || i == -1)
+		 return '';
+	
+	var t;
+	var s = '';
+	var c = 0;
+	
+	if (i > 3600000) {
+		t = Math.floor(i / 3600000);
+		i -= t*3600000;
+		s += t + 'h';
+		c++;
+	}
+	
+	if (i > 60000) {
+		t = Math.floor(i / 60000);
+		i -= t*60000;
+		s += t + 'm';
+		c++;
+	}
+	
+	if (c > 1)
+		return s;
+	
+	if (i >= 10000) {
+		t = Math.floor(i / 1000);
+		i -= t*1000;
+		s += t + 's';
+		c++;
+	}
+	
+	if (c)
+		return s;
+	
+	i = i / 1000;
+	
+	return i.toFixed(3) + 's';
+}
+
 var evq = {};
 var ev = [];
 
@@ -72,6 +113,7 @@ var app = angular.module('edysquelch', []).
 	});
 
 app.filter('duration', function() { return dur_str; });
+app.filter('duration_ms', function() { return dur_str_ms; });
 app.filter('datetime', function() { return timestr; });
 
 app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
@@ -131,7 +173,8 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			colors: [ '#ff0000', '#0000ff' ],
 			xaxis: _x_opt,
 			yaxis: _y_opt,
-			selection: { mode: "x" }
+			selection: { mode: "x" },
+			series: { points: { show: false }, lines: { show: true } }
 		};
 		
 		var elem = $('#graph');
@@ -171,6 +214,8 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 				_o.xaxis.max = null;
 			}
 			
+			_o.series.points.show = (range && (range.to - range.from < 50));
+			
 			//console.log("opt: " + JSON.stringify(_o));
 			
 			pl = $.plot(elem, _d, _o);
@@ -181,7 +226,7 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			
 			var samples = rx.slice(range.from + pe['rxofs'], range.to + pe['rxofs'] + 1);
 			//console.log("samples: " + JSON.stringify(samples));
-			console.log("name: " + $scope.createForm.fpname);
+			console.log("name: " + $scope.fpname);
 			
 			$scope.fingerprintCreating = false;
 			data = {
@@ -216,8 +261,16 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			$scope.evq = evq = d['evq'];
 			
 			if (d['ev']) {
-				for (var i in d['ev'])
-					ev.unshift(d['ev'][i]);
+				for (var i in d['ev']) {
+					if (d['ev'][i].event == 'sqlend') {
+						for (var ei = 0; ei < ev.length; ei++)
+							if (ev[ei].id == d['ev'][i].id) {
+								ev[ei].duration = d['ev'][i].duration;
+								break;
+							}
+					} else
+						ev.unshift(d['ev'][i]);
+				}
 				
 				plotEvent(ev[0]);
 			}

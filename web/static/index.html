@@ -37,29 +37,33 @@
 	<button ng-click="fingerprintCreating=1">Create fingerprint</button>
 </div>
 <div ng-show="fingerprintCreating">
-<form name="createForm">
+<form name="createForm" novalidate>
 <label for="fpname">Name for new fingerprint:</label>
-<input type="text" ng-model="text" ng-pattern="validFpName" required id="fpname" name="fpname" placeholder="n0call"></input>
-<button ng-click="createFingerprint(rangeSelected)">Save fingerprint</button><br />
-<span class="error" ng-show="myForm.input.$error.required">Required!</span>
-<span class="error" ng-show="myForm.input.$error.pattern">Single word only!</span>
+<input type="text" ng-pattern="validFpName" required ng-model="fpname" name="fpname" placeholder="n0call"></input>
+<button ng-click="createFingerprint(rangeSelected)" ng-disabled="createForm.$invalid">Save fingerprint</button><br />
+<span class="error" ng-show="createForm.fpname.$error.required">Required!</span>
+<span class="error" ng-show="createForm.fpname.$error.pattern">Single word only!</span>
 </form>
 </div>
 </div>
 
 <h3>Events</h3>
-<table>
+<table class='events'>
 <tr><th>Time</th>
 	<th>Fingerprint</th>
 	<th>Type</th>
 	<th>Diff</th>
 	<th>FPLen</th>
+	<th>Duration</th>
 	</tr>
-<tr ng-repeat="c in ev" ng-click="rowClick(c);"><td>{{ c.t|datetime }}</td>
+<tr ng-repeat="c in ev" ng-click="rowClick(c);"
+	ng-class="{selected: c.id==shownEvent.id, keydown: c.duration==-1}">
+	<td>{{ c.t|datetime }}</td>
 	<td>{{ c.name }}</td>
 	<td>{{ c.event }}</td>
 	<td>{{ c.q }}</td>
 	<td>{{ c.fplen }}</td>
+	<td>{{ c.duration|duration_ms }}</td>
 	</tr>
 </table>
 
