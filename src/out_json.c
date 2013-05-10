@@ -244,13 +244,13 @@ static void jsonout_thread(void *asdf)
 		usleep(200000);
 		
 		if (out_json_que) {
-			hlog(LOG_DEBUG, "jsonout: grabbing outq");
+			//hlog(LOG_DEBUG, "jsonout: grabbing outq");
 			pthread_mutex_lock(&out_json_que_mut);
 			struct que_t *out = out_json_que;
 			out_json_tail = &out_json_que;
 			out_json_que = NULL;
 			pthread_mutex_unlock(&out_json_que_mut);
-			hlog(LOG_DEBUG, "jsonout: posting");
+			//hlog(LOG_DEBUG, "jsonout: posting");
 			jsonout_post_all(out);
 		}
 	}
