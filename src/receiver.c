@@ -92,7 +92,7 @@ static void notify_queue(cJSON *no)
 	char *out = cJSON_PrintUnformatted(no);
 	cJSON_Delete(no);
 	
-	hlog(LOG_DEBUG, "Notification queued"); //: %s", out);
+	//hlog(LOG_DEBUG, "Notification queued"); //: %s", out);
 	
 	jsonout_push(out);
 }
@@ -265,6 +265,7 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int 
 }
 
 static int sql_open = 0;
+static int sql_close_delay_samples = (100*48000/1000); // 100 ms
 
 #define SQL_YRANGE_HIGH 5000
 #define SQL_YRANGE_LOW -10000
@@ -280,12 +281,16 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 	static unsigned long sql_bit, sql_step_avg;
 	static unsigned int sql_red_step;
 	static unsigned long sql_open_at_pos;
+	static unsigned long sql_pre_open_at_pos;
+	static int sql_pre_open = 0;
 	short filtered_samples[SQL_OPEN_SCAN_LEN];
 	
 	while (od < len) {
 		out[od] = cur = in[id];
 		if (cur > maxval)
 			maxval = cur;
+		
+		sql_pos++;
 		
 		if (sql_bit == 1) {
 			if (cur < SQL_YRANGE_LOW) {
@@ -296,12 +301,10 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 					sql_step_avg += 1;
 				}
 				
-				if (sql_open && sql_step_avg > 30) {
-					sql_open = 0;
-					// TODO: handle overflow
-					unsigned long over_length = ((sql_pos - sql_open_at_pos) * 1000) / 48000;
-					hlog(LOG_INFO, "SQL closed, over length %.3f s", (float)over_length / 1000);
-					notify_out_over_end(over_length);
+				if (sql_pre_open && sql_step_avg > 30) {
+					sql_pre_open = 0;
+					sql_pre_open_at_pos = sql_pos;
+					hlog(LOG_DEBUG, "SQL pre-close");
 				}
 			}
 		} else {
@@ -310,23 +313,34 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 			}
 		}
 		
-		sql_pos++;
 		sql_red_step++;
+		
 		if (sql_red_step == 30) {
 			sql_red_step = 0;
+			
+			if (sql_open && !sql_pre_open && sql_pos - sql_pre_open_at_pos >= sql_close_delay_samples) {
+				// TODO: handle overflow
+				unsigned long over_length = ((sql_pos - sql_open_at_pos) * 1000) / 48000;
+				hlog(LOG_INFO, "SQL closed, over length %.3f s", (float)over_length / 1000);
+				notify_out_over_end(over_length);
+				sql_open = 0;
+			}
+			
 			if (sql_step_avg > 0) {
 				sql_step_avg -= 1;
 			} else {
+				sql_pre_open = 1;
+				
 				if (!sql_open) {
 					sql_open = 1;
 					sql_open_at_pos = sql_pos;
 					hlog(LOG_INFO, "SQL opened, last noise %ld samples ago", sql_pos - sql_last_high);
 					int last_noise_ofs = SQL_OPEN_SCAN_LEN - (sql_pos-sql_last_high);
 					
-					sample_filter_avg(filtered_samples, &out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN);
+					int newlen = sample_filter_avg(filtered_samples, &out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN);
 					
-					if (search_fingerprints(filtered_samples, SQL_OPEN_SCAN_LEN, last_noise_ofs) == NULL)
-						notify_out_sql(filtered_samples, SQL_OPEN_SCAN_LEN, last_noise_ofs);
+					if (search_fingerprints(filtered_samples, newlen, last_noise_ofs) == NULL)
+						notify_out_sql(filtered_samples, newlen, last_noise_ofs);
 					//if (search_fingerprints(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs) == NULL)
 					//	notify_out_sql(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs);
 				}
