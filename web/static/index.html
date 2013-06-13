@@ -4,6 +4,7 @@
 <title>edysquelch</title>
 <meta name="lang" content="en" />
 <meta http-equiv="Content-Type" content="application/xhtml+xml;charset=UTF-8" />
+<link rel="stylesheet" type="text/css" href="http://st.pimg.net/cdn/libs/bootstrap/2.2/css/bootstrap.min.css" />
 <link rel="stylesheet" type="text/css" href="/edysquelch.css" />
 <script src="angular.min.js"></script>
 </head>
@@ -47,7 +48,11 @@
 </div>
 </div>
 
-<h3>Events</h3>
+<h4>Events
+<buttons-radio class="btn-group" data-toggle="buttons-radio"
+model='liveModel' options='liveOptions'></buttons-radio>
+</h4>
+
 <table class='events'>
 <tr><th>Time</th>
 	<th>Fingerprint</th>

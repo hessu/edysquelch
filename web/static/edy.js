@@ -112,6 +112,26 @@ var app = angular.module('edysquelch', []).
 		console.log('edy module run');
 	});
 
+app.directive('buttonsRadio', function() {
+	console.log("buttonsRadio setup");
+	return {
+		restrict: 'E',
+		scope: { model: '=', options:'='},
+		controller: function($scope) {
+			console.log("buttonsRadio controller setup");
+			$scope.activate = function(option){
+				$scope.model = option;
+			};      
+		},
+		template: "<button type='button' class='btn' "+
+			"ng-class='{active: option == model}'"+
+			"ng-repeat='option in options' "+
+			"ng-click='activate(option)'>{{option}} "+
+			"</button>"
+	};
+});
+
+
 app.filter('duration', function() { return dur_str; });
 app.filter('duration_ms', function() { return dur_str_ms; });
 app.filter('datetime', function() { return timestr; });
@@ -120,6 +140,13 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 	console.log('edyCtrl init');
 	
 	$scope.validFpName = /^\w*$/;
+	
+	$scope.liveOptions = ["Live", "Selected"];
+	$scope.liveModel = "Live";
+	
+	$scope.$watch('liveModel', function(v){
+		console.log('changed', v);
+	});
 	
 	var plotEvent = function(pe) {
 		console.log("Plotting event " + pe['t']);
@@ -243,7 +270,11 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			//alert('Sorry, we are not quite there yet.');
 		};
 	};
-	$scope.rowClick = plotEvent;
+	$scope.rowClick = function(pe) {
+		$scope.liveModel = 'Selected';
+		plotEvent(pe);
+	}
+	
 	$scope.ev = ev;
 	
 	var ajax_update = function($scope, $http) {
@@ -272,7 +303,8 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 						ev.unshift(d['ev'][i]);
 				}
 				
-				plotEvent(ev[0]);
+				if ($scope.liveModel == 'Live')
+					plotEvent(ev[0]);
 			}
 			
 			setTimeout(function() { ajax_update($scope, $http); }, 1200);
