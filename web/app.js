@@ -8,7 +8,11 @@ util.log("startup");
 
 var evq_seq = 0;
 var evq_len = 0;
+
 var evq = [];
+
+var sambledb_file = './data/samples.json';
+var samples = {};
 
 var app = express();
 app.configure(function() {
@@ -120,8 +124,21 @@ var handle_upd = function(req, res) {
 	upd_response(seq, res);
 };
 
+var handle_fp_create = function(req, res) {
+	util.log("got fp create: " + req.body['name']);
+	
+	samples[req.body['name']] = req.body['samples'];
+	util.log("samples: " + req.body['samples']);
+	
+	res.setHeader('Cache-Control', 'no-cache');
+	res.json({
+		'result': 'ok'
+	});
+};
+
 app.post('/api/push', handle_push); 
 app.get('/api/upd', handle_upd); 
+app.post('/api/fp/create', handle_fp_create); 
 
 util.log("pwm-api set up, starting listener");
 

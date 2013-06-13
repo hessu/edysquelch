@@ -230,7 +230,7 @@ app.controller('edyCtrl', [ '$scope', '$http', function($scope, $http) {
 			
 			$scope.fingerprintCreating = false;
 			data = {
-				'name': 'asdf',
+				'name': $scope.fpname,
 				'samples': samples
 			};
 			
