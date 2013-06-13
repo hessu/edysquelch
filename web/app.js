@@ -2,7 +2,8 @@
 var http = require('http'),
 	express = require("express"),
 	util = require("util"),
-	events = require("events");
+	events = require("events"),
+	fs = require("fs");
                 
 util.log("startup");
 
@@ -11,7 +12,8 @@ var evq_len = 0;
 
 var evq = [];
 
-var sambledb_file = './data/samples.json';
+var sambledb_file = './samples/INDEX.json';
+var sampledir = './samples';
 var samples = {};
 
 var app = express();
@@ -125,14 +127,51 @@ var handle_upd = function(req, res) {
 };
 
 var handle_fp_create = function(req, res) {
-	util.log("got fp create: " + req.body['name']);
 	
-	samples[req.body['name']] = req.body['samples'];
-	util.log("samples: " + req.body['samples']);
+	// TODO: validate
+	var name = req.body['name'];
+	var samples = req.body['samples'];
+	
+	util.log("got fp create: " + req.body['name'] + " - " + samples.length + " samples");
+	
+	samples[name] = samples;
+	//util.log("samples: " + samples);
+	
+	var buf = new Buffer(samples.length * 2);
+	for (var i = 0; i < samples.length; i++) {
+		try {
+			buf.writeInt16LE(samples[i], i*2);
+		} catch (err) {
+			util.log("fp create: failed when placing  sample " + i + " with value " + samples[i]);
+		}
+	}
 	
 	res.setHeader('Cache-Control', 'no-cache');
 	res.json({
 		'result': 'ok'
+	});
+	
+	var fname = sampledir + '/' + name + '.raw';
+	
+	fs.open(fname, 'w', 0644, function(err, fd) {
+		util.log("fs open, err " + err);
+		if (err !== null) {
+			util.log("failed to open " + fname + " for writing: " + err);
+			return;
+		}
+		
+		fs.write(fd, buf, 0, buf.length, 0, function(err) {
+			if (err !== null) {
+				util.log("failed to write sample to " + fname + ": " + err);
+			} else {
+				util.log("sample " + fname + " saved, " + buf.length + " bytes on disk");
+			}
+			
+			fs.close(fd, function(err) {
+				if (err !== null)
+					util.log("sample " + fname + " close failed after write: " + err);
+			});
+		});
 	});
 };
 
