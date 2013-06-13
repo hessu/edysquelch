@@ -126,6 +126,7 @@ var handle_upd = function(req, res) {
 	upd_response(seq, res);
 };
 
+var sample_name_regexp = /^[a-zA-Z\d\-\_]+$/;
 var handle_fp_create = function(req, res) {
 	
 	// TODO: validate
@@ -134,9 +135,21 @@ var handle_fp_create = function(req, res) {
 	
 	util.log("got fp create: " + req.body['name'] + " - " + samples.length + " samples");
 	
-	samples[name] = samples;
-	//util.log("samples: " + samples);
+	res.setHeader('Cache-Control', 'no-cache');
 	
+	if (sample_name_regexp.test(name) == false) {
+		res.json({
+			'result': 'fail'
+		});
+		util.log("fp create failed: invalid name");
+		return;
+	}
+	
+	res.json({
+		'result': 'ok'
+	});
+	
+	samples[name] = samples;
 	var buf = new Buffer(samples.length * 2);
 	for (var i = 0; i < samples.length; i++) {
 		try {
@@ -145,11 +158,6 @@ var handle_fp_create = function(req, res) {
 			util.log("fp create: failed when placing  sample " + i + " with value " + samples[i]);
 		}
 	}
-	
-	res.setHeader('Cache-Control', 'no-cache');
-	res.json({
-		'result': 'ok'
-	});
 	
 	var fname = sampledir + '/' + name + '.raw';
 	
