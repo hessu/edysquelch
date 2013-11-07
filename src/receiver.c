@@ -275,7 +275,9 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 {
 	int id = 0;
 	int od = 0;
-	short maxval = 0;
+	short maxval = -32000;
+	short minval = 32000;
+	long avgval_sum = 0;
 	short cur;
 	static unsigned long sql_pos, sql_last_high; // TODO: These are going to overflow, with unseen consequences
 	static unsigned long sql_bit, sql_step_avg;
@@ -289,11 +291,15 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 		out[od] = cur = in[id];
 		if (cur > maxval)
 			maxval = cur;
+		if (cur < minval)
+			minval = cur;
+		avgval_sum += cur;
 		
 		sql_pos++;
 		
 		if (sql_bit == 1) {
 			if (cur < SQL_YRANGE_LOW) {
+				//hlog(LOG_DEBUG, "went low");
 				sql_bit = 0;
 				sql_last_high = sql_pos;
 				
@@ -301,7 +307,7 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 					sql_step_avg += 1;
 				}
 				
-				if (sql_pre_open && sql_step_avg > 30) {
+				if (sql_pre_open && sql_step_avg > 15) {
 					sql_pre_open = 0;
 					sql_pre_open_at_pos = sql_pos;
 					hlog(LOG_DEBUG, "SQL pre-close");
@@ -310,13 +316,16 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 		} else {
 			if (cur > SQL_YRANGE_HIGH) {
 				sql_bit = 1;
+				//hlog(LOG_DEBUG, "went high");
 			}
 		}
 		
 		sql_red_step++;
 		
-		if (sql_red_step == 30) {
+		if (sql_red_step == 15) {
 			sql_red_step = 0;
+			
+			//hlog(LOG_DEBUG, "checking sql, sql_pre_open %d", sql_pre_open);
 			
 			if (sql_open && !sql_pre_open && sql_pos - sql_pre_open_at_pos >= sql_close_delay_samples) {
 				// TODO: handle overflow
@@ -351,7 +360,7 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 		od++;
 	}
 	
-	//hlog(LOG_DEBUG, "sql_step_avg: %d", sql_step_avg);
+	hlog(LOG_DEBUG, "sql_step_avg: %d - sample range: %d ... %d, avg %ld", sql_step_avg, minval, maxval, avgval_sum/len);
 	
 	*maxval_out = maxval;
 	return od;
@@ -387,7 +396,7 @@ void receiver_run(struct receiver *rx, short *buf, int len)
 	level = (float)maxval / (float)32768 * (float)100;
 	level_distance = time(NULL) - rx->last_levellog;
 	
-	if (level > 95.0 && (level_distance >= 30 || level_distance >= sound_levellog)) {
+	if (level > 99.0 && (level_distance >= 30 || level_distance >= sound_levellog)) {
 		hlog(LOG_NOTICE, "Level on ch %d too high: %.0f %%", rx->ch_ofs, level);
 		time(&rx->last_levellog);
 	} else if (sound_levellog != 0 && level_distance >= sound_levellog) {
