@@ -19,15 +19,20 @@
 #include "cJSON.h"
 
 
+/* FIR coefficients, bands 0 ... 4000 Hz filter, 5000 ... 24000 Hz pass */
 static float coeffs[]={
-   2.5959e-55, 2.9479e-49, 1.4741e-43, 3.2462e-38, 3.1480e-33,
-   1.3443e-28, 2.5280e-24, 2.0934e-20, 7.6339e-17, 1.2259e-13,
-   8.6690e-11, 2.6996e-08, 3.7020e-06, 2.2355e-04, 5.9448e-03,
-   6.9616e-02, 3.5899e-01, 8.1522e-01, 8.1522e-01, 3.5899e-01,
-   6.9616e-02, 5.9448e-03, 2.2355e-04, 3.7020e-06, 2.6996e-08,
-   8.6690e-11, 1.2259e-13, 7.6339e-17, 2.0934e-20, 2.5280e-24,
-   1.3443e-28, 3.1480e-33, 3.2462e-38, 1.4741e-43, 2.9479e-49,
-   2.5959e-55
+        -3.63643401e-01,   4.42966528e-02,  -1.67480122e-02,
+         1.34063018e-02,  -5.09622442e-02,  -2.31586393e-03,
+        -5.28037096e-02,   2.57976086e-02,  -1.96545184e-02,
+         7.37171662e-02,   5.99298853e-04,   8.74691352e-02,
+        -4.56404347e-02,   4.35786023e-02,  -1.69039005e-01,
+         8.58638063e-05,  -3.80806415e-01,   4.46237703e-01,
+         4.46237703e-01,  -3.80806415e-01,   8.58638063e-05,
+        -1.69039005e-01,   4.35786023e-02,  -4.56404347e-02,
+         8.74691352e-02,   5.99298853e-04,   7.37171662e-02,
+        -1.96545184e-02,   2.57976086e-02,  -5.28037096e-02,
+        -2.31586393e-03,  -5.09622442e-02,   1.34063018e-02,
+        -1.67480122e-02,   4.42966528e-02,  -3.63643401e-01
 };
 #define COEFFS_L 36 
 
@@ -267,11 +272,12 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int 
 static int sql_open = 0;
 static int sql_close_delay_samples = (100*48000/1000); // 100 ms
 
-#define SQL_YRANGE_HIGH 5000
-#define SQL_YRANGE_LOW -10000
-#define SQL_OPEN_SCAN_LEN 2000
+#define SQL_ABSVAL_DIVIDER (44100/20) /* 0.05s */
+#define SQL_ABSVAL_THR_OPEN (2000*SQL_ABSVAL_DIVIDER)
+#define SQL_ABSVAL_THR_CLOSE (3400*SQL_ABSVAL_DIVIDER)
+#define SQL_OPEN_SCAN_LEN SQL_ABSVAL_DIVIDER*2
 
-static int copy_buffer(short *in, short *out, int step, int len, short *maxval_out)
+static int copy_buffer(short *in, short *out, short *in_sql_hp, int step, int len, short *maxval_out)
 {
 	int id = 0;
 	int od = 0;
@@ -279,13 +285,14 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 	short minval = 32000;
 	long avgval_sum = 0;
 	short cur;
-	static unsigned long sql_pos, sql_last_high; // TODO: These are going to overflow, with unseen consequences
-	static unsigned long sql_bit, sql_step_avg;
+	static unsigned long sql_pos;
 	static unsigned int sql_red_step;
 	static unsigned long sql_open_at_pos;
 	static unsigned long sql_pre_open_at_pos;
 	static int sql_pre_open = 0;
 	short filtered_samples[SQL_OPEN_SCAN_LEN];
+
+	static unsigned long sql_absval_sum = SQL_ABSVAL_DIVIDER*SQL_ABSVAL_THR_CLOSE;
 	
 	while (od < len) {
 		out[od] = cur = in[id];
@@ -295,64 +302,36 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 			minval = cur;
 		avgval_sum += cur;
 		
+		sql_absval_sum -= (sql_absval_sum/SQL_ABSVAL_DIVIDER);
+		short cur_sql = in_sql_hp[od];
+		sql_absval_sum += (cur_sql > 0) ? cur_sql : cur_sql * -1;
+		
 		sql_pos++;
-		
-		if (sql_bit == 1) {
-			if (cur < SQL_YRANGE_LOW) {
-				//hlog(LOG_DEBUG, "went low");
-				sql_bit = 0;
-				sql_last_high = sql_pos;
-				
-				if (sql_step_avg < 40) {
-					sql_step_avg += 1;
-				}
-				
-				if (sql_pre_open && sql_step_avg > 15) {
-					sql_pre_open = 0;
-					sql_pre_open_at_pos = sql_pos;
-					hlog(LOG_DEBUG, "SQL pre-close");
-				}
-			}
-		} else {
-			if (cur > SQL_YRANGE_HIGH) {
-				sql_bit = 1;
-				//hlog(LOG_DEBUG, "went high");
-			}
-		}
-		
 		sql_red_step++;
-		
 		if (sql_red_step == 15) {
 			sql_red_step = 0;
 			
 			//hlog(LOG_DEBUG, "checking sql, sql_pre_open %d", sql_pre_open);
 			
-			if (sql_open && !sql_pre_open && sql_pos - sql_pre_open_at_pos >= sql_close_delay_samples) {
-				// TODO: handle overflow
+			if (sql_open && sql_absval_sum > SQL_ABSVAL_THR_CLOSE) {
 				unsigned long over_length = ((sql_pos - sql_open_at_pos) * 1000) / 48000;
 				hlog(LOG_INFO, "SQL closed, over length %.3f s", (float)over_length / 1000);
 				notify_out_over_end(over_length);
 				sql_open = 0;
 			}
 			
-			if (sql_step_avg > 0) {
-				sql_step_avg -= 1;
-			} else {
-				sql_pre_open = 1;
+			if (!sql_open && sql_absval_sum < SQL_ABSVAL_THR_OPEN) {
+				sql_open = 1;
+				sql_open_at_pos = sql_pos;
+				hlog(LOG_INFO, "SQL opened");
 				
-				if (!sql_open) {
-					sql_open = 1;
-					sql_open_at_pos = sql_pos;
-					hlog(LOG_INFO, "SQL opened, last noise %ld samples ago", sql_pos - sql_last_high);
-					int last_noise_ofs = SQL_OPEN_SCAN_LEN - (sql_pos-sql_last_high);
-					
-					int newlen = sample_filter_avg(filtered_samples, &out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN);
-					
-					if (search_fingerprints(filtered_samples, newlen, last_noise_ofs) == NULL)
-						notify_out_sql(filtered_samples, newlen, last_noise_ofs);
+				int newlen = sample_filter_avg(filtered_samples, &out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN);
+				
+				int last_noise_ofs = SQL_OPEN_SCAN_LEN-SQL_ABSVAL_DIVIDER;
+				if (search_fingerprints(filtered_samples, newlen, last_noise_ofs) == NULL)
+					notify_out_sql(filtered_samples, newlen, last_noise_ofs);
 					//if (search_fingerprints(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs) == NULL)
 					//	notify_out_sql(&out[od-SQL_OPEN_SCAN_LEN], SQL_OPEN_SCAN_LEN, last_noise_ofs);
-				}
 			}
 		}
 		
@@ -360,7 +339,8 @@ static int copy_buffer(short *in, short *out, int step, int len, short *maxval_o
 		od++;
 	}
 	
-	hlog(LOG_DEBUG, "sql_step_avg: %d - sample range: %d ... %d, avg %ld", sql_step_avg, minval, maxval, avgval_sum/len);
+	hlog(LOG_DEBUG, "sql_step_avg: sample range: %d ... %d, avg %ld sql lev %ld",
+		minval, maxval, avgval_sum/len, sql_absval_sum/SQL_ABSVAL_DIVIDER);
 	
 	*maxval_out = maxval;
 	return od;
@@ -387,7 +367,11 @@ void receiver_run(struct receiver *rx, short *buf, int len)
 		rx->bufpos = RECEIVER_BUF_COPY;
 	}
 	
-	int copied = copy_buffer(buf, &rx->buffer[rx->bufpos], rx_num_ch, len, &maxval);
+	/* run highpass filter for squelch */
+	short sql_hp_filtered[RECEIVER_BUFLEN];
+	filter_run_buf(rx->filter, buf, sql_hp_filtered, rx_num_ch, len);
+	
+	int copied = copy_buffer(buf, &rx->buffer[rx->bufpos], sql_hp_filtered, rx_num_ch, len, &maxval);
 	
 	//search_fingerprints(&rx->buffer[rx->bufpos], len);
 	rx->bufpos += copied;

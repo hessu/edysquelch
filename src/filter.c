@@ -114,9 +114,6 @@ short filter_run_buf(struct filter *f, short *in, short *out, int step, int len)
 		if (in[id] > maxval)
 			maxval = in[id];
                 
-                out[od] = in[id];
-
-#if 0		
 		out[od] = mac(&buffer[pointer - f->length], f->taps, f->length);
 		pointer++;
 		
@@ -128,7 +125,6 @@ short filter_run_buf(struct filter *f, short *in, short *out, int step, int len)
 			       f->length * sizeof(float));
 			pointer = f->length;
 		}
-#endif
 		
 		id += step;
 		od++;
