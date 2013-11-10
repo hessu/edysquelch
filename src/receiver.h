@@ -22,14 +22,16 @@ extern struct fingerprint_t *fingerprints;
 
 #define RECEIVER_BUFLEN 16384
 struct receiver {
-	struct filter *filter;
+	struct filter *filter_sql;
+	struct filter *filter_txid;
 	char name;
 	int num_ch;
 	int ch_ofs;
 	time_t last_levellog;
 	
 	int bufpos;
-	int16_t buffer[RECEIVER_BUFLEN];
+	int16_t buffer_sql[RECEIVER_BUFLEN];
+	int16_t buffer_txid[RECEIVER_BUFLEN];
 };
 
 extern struct receiver *init_receiver(char name, int num_ch, int ch_ofs);

@@ -19,8 +19,11 @@
 #include "cJSON.h"
 
 
-/* FIR coefficients, bands 0 ... 4000 Hz filter, 5000 ... 24000 Hz pass */
-static float coeffs[]={
+/* FIR coefficients, bands 0 ... 4000 Hz filter, 5000 ... 24000 Hz pass:
+ * from scipy import signal
+ * b = signal.remez(36, [0, 4000, 5000, 24000], [0, 1], Hz=48000)
+ */
+static float coeffs_sql[]={
         -3.63643401e-01,   4.42966528e-02,  -1.67480122e-02,
          1.34063018e-02,  -5.09622442e-02,  -2.31586393e-03,
         -5.28037096e-02,   2.57976086e-02,  -1.96545184e-02,
@@ -34,6 +37,22 @@ static float coeffs[]={
         -2.31586393e-03,  -5.09622442e-02,   1.34063018e-02,
         -1.67480122e-02,   4.42966528e-02,  -3.63643401e-01
 };
+
+/* FIR coefficients for txid signal:
+ * from scipy import signal
+ * b = signal.remez(36, [0, 700, 900, 24000], [1, 0], Hz=48000)
+ */
+static float coeffs_txid[]={
+        0.14712691,  0.07751501, -0.02297688,  0.06114172, -0.00536196,
+        0.05092962,  0.00694951,  0.04458397,  0.01570522,  0.0405898 ,
+        0.02192375,  0.03815735,  0.02629226,  0.0363804 ,  0.02967061,
+        0.03514475,  0.03193517,  0.03362722,  0.03362722,  0.03193517,
+        0.03514475,  0.02967061,  0.0363804 ,  0.02629226,  0.03815735,
+        0.02192375,  0.0405898 ,  0.01570522,  0.04458397,  0.00694951,
+        0.05092962, -0.00536196,  0.06114172, -0.02297688,  0.07751501,
+        0.14712691
+};
+
 #define COEFFS_L 36 
 
 
@@ -44,7 +63,8 @@ struct receiver *init_receiver(char name, int num_ch, int ch_ofs)
 	rx = (struct receiver *) hmalloc(sizeof(struct receiver));
 	memset(rx, 0, sizeof(struct receiver));
 
-	rx->filter = filter_init(COEFFS_L, coeffs);
+	rx->filter_sql = filter_init(COEFFS_L, coeffs_sql);
+	rx->filter_txid = filter_init(COEFFS_L, coeffs_txid);
 
 	rx->name = name;
 	rx->num_ch = num_ch;
@@ -54,16 +74,19 @@ struct receiver *init_receiver(char name, int num_ch, int ch_ofs)
 	rx->bufpos = RECEIVER_BUFLEN/4;
 	
 	int i;
-	for (i = 0; i < RECEIVER_BUFLEN; i++)
-		rx->buffer[i] = -16000;
-
+	for (i = 0; i < RECEIVER_BUFLEN; i++) {
+		rx->buffer_sql[i] = -16000;
+		rx->buffer_txid[i] = 0;
+	}
+	
 	return rx;
 }
 
 void free_receiver(struct receiver *rx)
 {
 	if (rx) {
-		filter_free(rx->filter);
+		filter_free(rx->filter_sql);
+		filter_free(rx->filter_txid);
 		hfree(rx);
 	}
 }
@@ -269,12 +292,13 @@ static struct fingerprint_t *search_fingerprints(int16_t *samples, int len, int 
 	return NULL;
 }
 
-static int sql_open = 0;
-static int sql_close_delay_samples = (100*48000/1000); // 100 ms
+#define SAMPLE_RATE 48000
 
-#define SQL_ABSVAL_DIVIDER (44100/20) /* 0.05s */
-#define SQL_ABSVAL_THR_OPEN (2000*SQL_ABSVAL_DIVIDER)
-#define SQL_ABSVAL_THR_CLOSE (3400*SQL_ABSVAL_DIVIDER)
+static int sql_open = 0;
+
+#define SQL_ABSVAL_DIVIDER (SAMPLE_RATE/40) /* 0.05s */
+#define SQL_ABSVAL_THR_OPEN (1500L*SQL_ABSVAL_DIVIDER)
+#define SQL_ABSVAL_THR_CLOSE (3400L*SQL_ABSVAL_DIVIDER)
 #define SQL_OPEN_SCAN_LEN SQL_ABSVAL_DIVIDER*2
 
 static int copy_buffer(short *in, short *out, short *in_sql_hp, int step, int len, short *maxval_out)
@@ -288,11 +312,10 @@ static int copy_buffer(short *in, short *out, short *in_sql_hp, int step, int le
 	static unsigned long sql_pos;
 	static unsigned int sql_red_step;
 	static unsigned long sql_open_at_pos;
-	static unsigned long sql_pre_open_at_pos;
-	static int sql_pre_open = 0;
 	short filtered_samples[SQL_OPEN_SCAN_LEN];
 
-	static unsigned long sql_absval_sum = SQL_ABSVAL_DIVIDER*SQL_ABSVAL_THR_CLOSE;
+	/* start up as squelch closed */
+	static unsigned long sql_absval_sum = SQL_ABSVAL_THR_CLOSE;
 	
 	while (od < len) {
 		out[od] = cur = in[id];
@@ -314,7 +337,7 @@ static int copy_buffer(short *in, short *out, short *in_sql_hp, int step, int le
 			//hlog(LOG_DEBUG, "checking sql, sql_pre_open %d", sql_pre_open);
 			
 			if (sql_open && sql_absval_sum > SQL_ABSVAL_THR_CLOSE) {
-				unsigned long over_length = ((sql_pos - sql_open_at_pos) * 1000) / 48000;
+				unsigned long over_length = ((sql_pos - sql_open_at_pos) * 1000) / SAMPLE_RATE;
 				hlog(LOG_INFO, "SQL closed, over length %.3f s", (float)over_length / 1000);
 				notify_out_over_end(over_length);
 				sql_open = 0;
@@ -338,9 +361,11 @@ static int copy_buffer(short *in, short *out, short *in_sql_hp, int step, int le
 		id += step;
 		od++;
 	}
-	
+
+#if 0
 	hlog(LOG_DEBUG, "sql_step_avg: sample range: %d ... %d, avg %ld sql lev %ld",
 		minval, maxval, avgval_sum/len, sql_absval_sum/SQL_ABSVAL_DIVIDER);
+#endif
 	
 	*maxval_out = maxval;
 	return od;
@@ -363,15 +388,15 @@ void receiver_run(struct receiver *rx, short *buf, int len)
 	
 #define RECEIVER_BUF_COPY (RECEIVER_BUFLEN/4)
 	if (rx->bufpos + len/rx_num_ch > RECEIVER_BUFLEN) { 
-		memcpy(rx->buffer, &rx->buffer[rx->bufpos - RECEIVER_BUF_COPY], RECEIVER_BUF_COPY*sizeof(uint16_t));
+		memcpy(rx->buffer_sql, &rx->buffer_sql[rx->bufpos - RECEIVER_BUF_COPY], RECEIVER_BUF_COPY*sizeof(uint16_t));
 		rx->bufpos = RECEIVER_BUF_COPY;
 	}
 	
 	/* run highpass filter for squelch */
 	short sql_hp_filtered[RECEIVER_BUFLEN];
-	filter_run_buf(rx->filter, buf, sql_hp_filtered, rx_num_ch, len);
+	filter_run_buf(rx->filter_sql, buf, sql_hp_filtered, rx_num_ch, len);
 	
-	int copied = copy_buffer(buf, &rx->buffer[rx->bufpos], sql_hp_filtered, rx_num_ch, len, &maxval);
+	int copied = copy_buffer(buf, &rx->buffer_sql[rx->bufpos], sql_hp_filtered, rx_num_ch, len, &maxval);
 	
 	//search_fingerprints(&rx->buffer[rx->bufpos], len);
 	rx->bufpos += copied;
